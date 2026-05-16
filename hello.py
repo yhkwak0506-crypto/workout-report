@@ -3,10 +3,10 @@ import pandas as pd
 from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
-import os
+import json
 
-# 🚨 [1] 다운로드 받으신 구글 시트 인터넷 창의 긴 주소를 아래 큰따옴표 "" 사이에 다시 넣어주세요!
-MY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1N4KGhJf1ta1MOcATsOXcJayTe9ULsNGhL_9u8Rdbo_Q/edit?gid=2146852898#gid=2146852898"
+# 🚨 구글 시트 주소 (연혁님의 마스터 시트 주소)
+MY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1N4KGhJf1ta1M0CATs0XcJayTe9ULsNGhL_9u8Rdbo_Q/edit?gid=214652898#gid=214652898"
 
 # 브라우저 탭 이름 설정
 st.set_page_config(page_title="Workout Report", layout="wide")
@@ -14,7 +14,7 @@ st.set_page_config(page_title="Workout Report", layout="wide")
 # ==========================================
 # 🔒 보안 로그인 시스템
 # ==========================================
-MY_PASSWORD = "1306"
+MY_PASSWORD = "1234"
 
 if "login_success" not in st.session_state:
     st.session_state.login_success = False
@@ -33,15 +33,20 @@ if not st.session_state.login_success:
     st.stop()
 
 # ==========================================
-# ☁️ 구글 시트 무선 연결 세팅 (오타 원천 차단 적용 완료)
+# ☁️ 구글 시트 무선 연결 세팅 (스트림릿 클라우드 금고 연동)
 # ==========================================
 @st.cache_resource
 def init_connection():
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    # 바탕화면의 secrets.json을 절대 경로로 오타 없이 정확하게 읽어오도록 수정했습니다.
-    key_path = os.path.expanduser("~/Desktop/secrets.json")
-    creds = Credentials.from_service_account_file(key_path, scopes=scopes)
-    return gspread.authorize(creds)
+    
+    # 💡 스트림릿 클라우드 금고(Secrets)에 넣은 gcp 열쇠 데이터를 안전하게 복원합니다.
+    try:
+        secret_info = dict(st.secrets["gcp"])
+        creds = Credentials.from_service_account_info(secret_info, scopes=scopes)
+        return gspread.authorize(creds)
+    except Exception as e:
+        st.error("🚨 스트림릿 금고(Secrets)에 구글 열쇠가 올바르게 입력되지 않았습니다. 관리자 창의 Secrets 세팅을 확인해 주세요!")
+        st.stop()
 
 gc = init_connection()
 
@@ -49,7 +54,7 @@ try:
     doc = gc.open_by_url(MY_SHEET_URL)
     sheet = doc.sheet1
 except Exception as e:
-    st.error("🚨 구글 시트 주소가 올바르지 않거나 연결에 실패했습니다. 코드 맨 위의 MY_SHEET_URL을 확인해 주세요!")
+    st.error("🚨 구글 시트 주소가 올바르지 않거나 Sheet1 탭을 찾을 수 없습니다.")
     st.stop()
 
 # ==========================================
@@ -185,7 +190,7 @@ elif workout_type == "웨이트 트레이닝":
     st.subheader("🏋️ 웨이트 세션 기록")
     ex_name = st.text_input("운동 이름")
     c1, c2, c3 = st.columns(3)
-    with c1: weight = st.number_input("무게 (kg)", step=2.5)
+    with c1: weight = min_value=0.0, st.number_input("무게 (kg)", step=2.5)
     with c2: reps = st.number_input("반복 횟수", step=1)
     with c3: sets = st.number_input("세트 수", min_value=1, step=1)
     if st.button("➕ 세트 추가"):
