@@ -5,16 +5,16 @@ import gspread
 from google.oauth2.service_account import Credentials
 import json
 
-# ⭕ 연혁님의 진짜 구글 시트 주소 (대소문자 오타 완벽 수정 완료!)
+# ⭕ 연혁님의 진짜 구글 시트 주소
 MY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1N4KGhJf1ta1MOcATsOXcJayTe9ULsNGhL_9u8Rdbo_Q/edit"
 
 # 브라우저 탭 이름 설정
-st.set_page_config(page_title="Workout Report", layout="wide")
+st.set_page_config(page_title="Workout Report V6", layout="wide")
 
 # ==========================================
 # 🔒 보안 로그인 시스템
 # ==========================================
-MY_PASSWORD = "1306"
+MY_PASSWORD = "1234"
 
 if "login_success" not in st.session_state:
     st.session_state.login_success = False
@@ -50,7 +50,6 @@ gc = init_connection()
 
 try:
     doc = gc.open_by_url(MY_SHEET_URL)
-    # 탭 이름 상관없이 무조건 첫 번째 탭 가져오기
     sheet = doc.get_worksheet(0)
 except Exception as e:
     st.error("🚨 구글 시트 주소가 올바르지 않거나 탭을 로드할 수 없습니다.")
@@ -59,9 +58,11 @@ except Exception as e:
 # ==========================================
 # 📊 Workout Report 메인 화면
 # ==========================================
-st.title("📊 Workout Report")
+st.title("📊 Workout Report V6 (S-Tier Physical)")
 
+# 데이터 임시 저장용 세션 상태 초기화
 if 'football_drills' not in st.session_state: st.session_state.football_drills = []
+if 'cardio_drills' not in st.session_state: st.session_state.cardio_drills = []
 if 'weight_sets' not in st.session_state: st.session_state.weight_sets = []
 
 # --- 0. 공복 체중 및 웰니스 입력 ---
@@ -97,29 +98,32 @@ if workout_type == "개인 축구 훈련":
     st.write("📝 **세부 훈련 루틴 담기**")
     c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
     with c1:
-        drill_opts = ["40/20 풀코트 인터벌", "15/5 드리블+슈팅 믹스", "기본기(리프팅/컨트롤)", "슈팅 연습", "직접 입력"]
+        drill_opts = [
+            "40/20 하프라인 인터벌", "25/20 penalty box 인터벌", "15/15 매스템포런", 
+            "경기템포 훈련", "기본기(리프팅/컨트롤)", "슈팅 연습", "직접 입력"
+        ]
         drill = st.selectbox("📋 훈련 종목", drill_opts)
         if drill == "직접 입력": drill = st.text_input("훈련 내용을 입력하세요")
     with c2: reps = st.number_input("반복 횟수", min_value=1, step=1, key='f_rep')
     with c3: sets = st.number_input("세트 수", min_value=1, step=1, key='f_set')
     with c4: rest = st.text_input("휴식(예: 2분)", key='f_rest')
     
-    if st.button("➕ 순서 추가"):
+    if st.button("➕ 루틴 추가"):
         st.session_state.football_drills.append(f"{drill}({reps}회/{sets}세트/휴식{rest})")
             
     if st.session_state.football_drills:
         st.info("👉 **현재 루틴:** " + " ➡️ ".join(st.session_state.football_drills))
-        if st.button("🗑️ 순서 비우기"): st.session_state.football_drills = []; st.rerun()
+        if st.button("🗑️ 루틴 비우기"): st.session_state.football_drills = []; st.rerun()
             
     col1, col2, col3, col4 = st.columns(4)
-    with col1: distance = st.number_input("🏃 뛴 거리 (km)", min_value=0.0, step=0.1)
+    with col1: distance = st.number_input("🏃 총 이동 거리 (km)", min_value=0.0, step=0.1)
     with col2: hr_avg = st.number_input("❤️ 평균 심박수", min_value=0, step=1)
     with col3: hr_max = st.number_input("🔥 최대 심박수", min_value=0, step=1)
     with col4: hr_recovery = st.text_input("📉 심박 회복량(HRR)")
     
     if st.button("💾 구글 시트로 저장하기"):
         sop_text = f"[{time_of_day}] 장소: {location} | 루틴: {' ➡️ '.join(st.session_state.football_drills)}"
-        analysis_text = f"웰니스(전:{pre_condition}/후:{post_condition}) | 필드 기동 세션 완료."
+        analysis_text = f"웰니스(전:{pre_condition}/후:{post_condition}) | 축구 전문 기동 세션 완료."
         data = {
             "날짜": today, "공복 체중": f"{weight_today}kg", "훈련 볼륨": f"{distance}km",
             "평균 심박": hr_avg, "최대 심박": hr_max, "심박 회복량(HRR)": hr_recovery,
@@ -132,28 +136,52 @@ if workout_type == "개인 축구 훈련":
 
 # --- 유산소/조깅 ---
 elif workout_type == "유산소/조깅":
-    st.subheader("🏃 유산소 및 조깅 기록")
-    col1, col2 = st.columns(2)
-    with col1:
-        location = st.selectbox("📍 코스", ["전주천변 (평지 위주)", "천변 오르막 코스", "트랙", "직접 입력"])
-        if location == "직접 입력": location = st.text_input("코스 직접 입력")
-        distance = st.number_input("🏃 거리 (km)", min_value=0.0, step=0.1)
-        pace = st.text_input("⏱️ 페이스 (예: 4:51)")
-        cadence = st.number_input("👣 케이던스 (spm)", min_value=0, step=1)
-    with col2:
-        hr_avg = st.number_input("❤️ 평균 심박수", min_value=0, step=1)
-        hr_max = st.number_input("🔥 최대 심박수", min_value=0, step=1)
-        hr_recovery = st.text_input("📉 심박 회복량(HRR)")
+    st.subheader("🏃 조깅 및 유산소 드릴 시퀀스")
+    
+    st.write("📝 **유산소 훈련 루틴 구성**")
+    c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
+    with c1:
+        cardio_opts = [
+            "조깅 (5분 페이스)", "A skip (오르막)", "Single leg jump (오르막)", 
+            "Two footed jumps (오르막)", "Single leg alternative broad jump", 
+            "오르막길 스프린트", "15/15 매스템포런", "직접 입력"
+        ]
+        c_drill = st.selectbox("📋 종목 선택", cardio_opts)
+        if c_drill == "직접 입력": c_drill = st.text_input("종목명 입력")
         
-    if st.button("💾 유산소 기록 저장하기"):
-        sop_text = f"[{time_of_day}] 코스: {location} | 페이스: {pace} | 케이던스: {cadence}spm"
-        analysis_text = f"웰니스(전:{pre_condition}/후:{post_condition}) | 심폐 조율 세션 완료."
+        # 오르막길 스프린트 선택 시 강도 입력창 노출
+        if c_drill == "오르막길 스프린트":
+            effort_pct = st.number_input("⚡ 강도 (%)", min_value=0, max_value=100, value=100, step=5)
+            c_drill = f"오르막 스프린트({effort_pct}%)"
+            
+    with c2: c_dist = st.text_input("거리/시간 (예: 5km)", key='c_dist')
+    with c3: c_reps = st.number_input("반복/횟수", min_value=1, step=1, key='c_rep')
+    with c4: c_sets = st.number_input("세트 수", min_value=1, step=1, key='c_set')
+    
+    if st.button("➕ 유산소 종목 추가"):
+        st.session_state.cardio_drills.append(f"{c_drill}({c_dist}/{c_reps}회/{c_sets}세트)")
+        
+    if st.session_state.cardio_drills:
+        st.warning("👉 **훈련 시퀀스:** " + " ➡️ ".join(st.session_state.cardio_drills))
+        if st.button("🗑️ 시퀀스 초기화"): st.session_state.cardio_drills = []; st.rerun()
+
+    st.write("---")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1: total_distance = st.number_input("🏃 전체 총 거리 (km)", min_value=0.0, step=0.1)
+    with col2: hr_avg = st.number_input("❤️ 세션 평균 심박", min_value=0, step=1)
+    with col3: hr_max = st.number_input("🔥 세션 최대 심박", min_value=0, step=1)
+    with col4: hr_recovery = st.text_input("📉 심박 회복량(HRR)")
+        
+    if st.button("💾 유산소 세션 저장하기"):
+        sop_text = f"[{time_of_day}] 유산소 시퀀스: {' ➡️ '.join(st.session_state.cardio_drills)}"
+        analysis_text = f"웰니스(전:{pre_condition}/후:{post_condition}) | 하체 파워 및 심폐 강화."
         data = {
-            "날짜": today, "공복 체중": f"{weight_today}kg", "훈련 볼륨": f"{distance}km",
+            "날짜": today, "공복 체중": f"{weight_today}kg", "훈련 볼륨": f"{total_distance}km",
             "평균 심박": hr_avg, "최대 심박": hr_max, "심박 회복량(HRR)": hr_recovery,
             "상세 훈련 내용 (SOP 및 실전 역학)": sop_text, "생리학적 분석 및 영양/비고": analysis_text
         }
         save_to_master_sheet(data)
+        st.session_state.cardio_drills = []
         st.success("구글 시트에 성공적으로 저장되었습니다!")
         st.rerun()
 
