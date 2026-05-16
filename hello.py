@@ -5,14 +5,12 @@ import gspread
 from google.oauth2.service_account import Credentials
 import os
 
-# --- 🧠 제미나이 AI 두뇌 연결 세팅 (V9.1 스마트 키 파인더 및 에러 스캐너 탑재) ---
+# --- 🧠 제미나이 AI 두뇌 연결 세팅 (V9.2 범용 모델명 gemini-pro 적용) ---
 try:
     import google.generativeai as genai
     
-    # 1. 기본 위치에서 키 찾기
     if "GEMINI_API_KEY" in st.secrets:
         GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
-    # 2. 혹시 [gcp] 구역 안으로 빨려 들어갔는지 확인 (스마트 파인더)
     elif "gcp" in st.secrets and "GEMINI_API_KEY" in st.secrets["gcp"]:
         GEMINI_API_KEY = st.secrets["gcp"]["GEMINI_API_KEY"]
     else:
@@ -20,7 +18,8 @@ try:
 
     if GEMINI_API_KEY:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # 💡 에러 원인 해결: 가장 안정적인 범용 텍스트 모델명으로 변경!
+        model = genai.GenerativeModel('gemini-pro')
         HAS_AI = True
         AI_ERROR = ""
     else:
@@ -28,12 +27,12 @@ try:
         AI_ERROR = "스트림릿 금고(Secrets)에서 API 키를 찾지 못했습니다."
 except Exception as e:
     HAS_AI = False
-    AI_ERROR = f"AI 모듈 설치 또는 로딩 에러: {str(e)}"
+    AI_ERROR = f"AI 로딩 에러: {str(e)}"
 
 # ⭕ 구글 시트 주소
 MY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1N4KGhJf1ta1MOcATsOXcJayTe9ULsNGhL_9u8Rdbo_Q/edit"
 
-st.set_page_config(page_title="S-Tier Performance AMS v9.1", layout="wide")
+st.set_page_config(page_title="S-Tier Performance AMS v9.2", layout="wide")
 
 # ==========================================
 # 🔒 보안 로그인
@@ -77,9 +76,8 @@ if 'weight_sets' not in st.session_state: st.session_state.weight_sets = []
 
 today = datetime.now().strftime("%Y-%m-%d")
 
-st.title("⚡ S-Tier AI Coach System (v9.1)")
+st.title("⚡ S-Tier AI Coach System (v9.2)")
 
-# 🚨 AI 상태 진단 경고창
 if not HAS_AI:
     st.warning(f"⚠️ 제미나이 AI 연결 대기 중... (에러 원인: {AI_ERROR})")
 
