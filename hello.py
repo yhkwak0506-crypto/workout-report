@@ -5,8 +5,8 @@ import gspread
 from google.oauth2.service_account import Credentials
 import json
 
-# 🚨 구글 시트 주소 (연혁님의 마스터 시트 주소)
-MY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1N4KGhJf1ta1M0CATs0XcJayTe9ULsNGhL_9u8Rdbo_Q/edit?gid=214652898#gid=214652898"
+# ⭕ 연혁님의 진짜 구글 시트 주소로 완벽히 매칭 완료했습니다!
+MY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1N4KGhJf1ta1M0CATs0XcJayTe9ULsNGhL_9u8Rdbo_Q/edit"
 
 # 브라우저 탭 이름 설정
 st.set_page_config(page_title="Workout Report", layout="wide")
@@ -14,7 +14,7 @@ st.set_page_config(page_title="Workout Report", layout="wide")
 # ==========================================
 # 🔒 보안 로그인 시스템
 # ==========================================
-MY_PASSWORD = "1234"
+MY_PASSWORD = "1306"
 
 if "login_success" not in st.session_state:
     st.session_state.login_success = False
@@ -33,28 +33,27 @@ if not st.session_state.login_success:
     st.stop()
 
 # ==========================================
-# ☁️ 구글 시트 무선 연결 세팅 (스트림릿 클라우드 금고 연동)
+# ☁️ 구글 시트 무선 연결 세팅
 # ==========================================
 @st.cache_resource
 def init_connection():
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    
-    # 💡 스트림릿 클라우드 금고(Secrets)에 넣은 gcp 열쇠 데이터를 안전하게 복원합니다.
     try:
         secret_info = dict(st.secrets["gcp"])
         creds = Credentials.from_service_account_info(secret_info, scopes=scopes)
         return gspread.authorize(creds)
     except Exception as e:
-        st.error("🚨 스트림릿 금고(Secrets)에 구글 열쇠가 올바르게 입력되지 않았습니다. 관리자 창의 Secrets 세팅을 확인해 주세요!")
+        st.error("🚨 스트림릿 금고(Secrets) 세팅을 확인해 주세요!")
         st.stop()
 
 gc = init_connection()
 
 try:
     doc = gc.open_by_url(MY_SHEET_URL)
+    # 구글 시트 맨 아래에 있는 첫 번째 탭을 강제로 타겟팅합니다!
     sheet = doc.sheet1
 except Exception as e:
-    st.error("🚨 구글 시트 주소가 올바르지 않거나 Sheet1 탭을 찾을 수 없습니다.")
+    st.error("🚨 구글 시트 주소가 올바르지 않거나 탭을 찾을 수 없습니다.")
     st.stop()
 
 # ==========================================
@@ -190,8 +189,8 @@ elif workout_type == "웨이트 트레이닝":
     st.subheader("🏋️ 웨이트 세션 기록")
     ex_name = st.text_input("운동 이름")
     c1, c2, c3 = st.columns(3)
-    with c1: weight = min_value=0.0, st.number_input("무게 (kg)", step=2.5)
-    with c2: reps = st.number_input("반복 횟수", step=1)
+    with c1: weight = st.number_input("무게 (kg)", min_value=0.0, step=2.5)
+    with c2: reps = st.number_input("반복 횟수", min_value=0, step=1)
     with c3: sets = st.number_input("세트 수", min_value=1, step=1)
     if st.button("➕ 세트 추가"):
         st.session_state.weight_sets.append({"운동명": ex_name, "무게": weight, "횟수": reps, "세트수": sets})
@@ -204,7 +203,7 @@ elif workout_type == "웨이트 트레이닝":
             data = {
                 "날짜": today, "공복 체중": f"{weight_today}kg", "훈련 볼륨": f"{len(st.session_state.weight_sets)}개 종목",
                 "평균 심박": 0, "최대 심박": 0, "심박 회복량(HRR)": "-",
-                "상세 훈련 내용 (SOP 및 실전 역학)": sop_text, "생리학적 분석 및 영양/비고": f"웰니스(전:{pre_condition}/후:{post_condition}) | 스트랭스 완료."
+                "상세 훈련 내용 (SOP 및 실전 역학)": sop_text, "genetics_analysis": f"웰니스(전:{pre_condition}/후:{post_condition}) | 스트랭스 완료."
             }
             save_to_master_sheet(data)
             st.session_state.weight_sets = [] 
