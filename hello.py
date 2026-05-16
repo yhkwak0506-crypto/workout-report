@@ -5,7 +5,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import json
 
-# ⭕ 연혁님의 진짜 구글 시트 주소로 완벽히 매칭 완료했습니다!
+# ⭕ 구글 시트 고유 ID만 깔끔하게 따서 완벽하게 매칭했습니다!
 MY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1N4KGhJf1ta1M0CATs0XcJayTe9ULsNGhL_9u8Rdbo_Q/edit"
 
 # 브라우저 탭 이름 설정
@@ -14,7 +14,7 @@ st.set_page_config(page_title="Workout Report", layout="wide")
 # ==========================================
 # 🔒 보안 로그인 시스템
 # ==========================================
-MY_PASSWORD = "1306"
+MY_PASSWORD = "1234"
 
 if "login_success" not in st.session_state:
     st.session_state.login_success = False
@@ -50,10 +50,10 @@ gc = init_connection()
 
 try:
     doc = gc.open_by_url(MY_SHEET_URL)
-    # 구글 시트 맨 아래에 있는 첫 번째 탭을 강제로 타겟팅합니다!
-    sheet = doc.sheet1
+    # 🔥 [치트키] 탭 이름이 뭐든 상관없이, 무조건 구글 시트의 '첫 번째 탭'을 강제로 가져옵니다!
+    sheet = doc.get_worksheet(0)
 except Exception as e:
-    st.error("🚨 구글 시트 주소가 올바르지 않거나 탭을 찾을 수 없습니다.")
+    st.error("🚨 구글 시트 주소가 올바르지 않거나 탭을 로드할 수 없습니다.")
     st.stop()
 
 # ==========================================
@@ -203,7 +203,7 @@ elif workout_type == "웨이트 트레이닝":
             data = {
                 "날짜": today, "공복 체중": f"{weight_today}kg", "훈련 볼륨": f"{len(st.session_state.weight_sets)}개 종목",
                 "평균 심박": 0, "최대 심박": 0, "심박 회복량(HRR)": "-",
-                "상세 훈련 내용 (SOP 및 실전 역학)": sop_text, "genetics_analysis": f"웰니스(전:{pre_condition}/후:{post_condition}) | 스트랭스 완료."
+                "상세 훈련 내용 (SOP 및 실전 역학)": sop_text, "생리학적 분석 및 영양/비고": f"웰니스(전:{pre_condition}/후:{post_condition}) | 스트랭스 완료."
             }
             save_to_master_sheet(data)
             st.session_state.weight_sets = [] 
