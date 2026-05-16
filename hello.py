@@ -41,7 +41,7 @@ def ask_gemini(prompt):
 # ⭕ 구글 시트 연결 세팅
 MY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1N4KGhJf1ta1MOcATsOXcJayTe9ULsNGhL_9u8Rdbo_Q/edit"
 
-st.set_page_config(page_title="S-Tier Performance AMS v9.7", layout="wide")
+st.set_page_config(page_title="Data of the Light", layout="wide")
 
 MY_PASSWORD = "1306"
 if "login_success" not in st.session_state: st.session_state.login_success = False
@@ -78,11 +78,12 @@ if 'weight_sets' not in st.session_state: st.session_state.weight_sets = []
 
 today = datetime.now().strftime("%Y-%m-%d")
 
-st.title("⚡ S-Tier AI Coach System (v9.7 퍼포먼스 스캐너)")
+# 💡 [업데이트] 메인 타이틀 변경
+st.title("⚡ Data of the Light")
 
-# 💡 [V9.7 업데이트] 탭 이름 변경: 모닝 바이오메트릭스 -> 신체데이터
+# 💡 [업데이트] 탭 이름 전면 수정
 tab_body, tab_workout, tab_diet, tab_report = st.tabs([
-    "📊 신체데이터", "🏋️ 운동 대시보드", "🥗 AI 식단 관리", "📈 AI 수석 코치 & 퍼포먼스"
+    "📊 신체 데이터", "🏋️ 운동 데이터", "🥗 식단 데이터", "📈 데이터/리포팅 센터"
 ])
 
 def extract_number(val):
@@ -90,7 +91,7 @@ def extract_number(val):
     return float(match.group(1)) if match else 0.0
 
 # ------------------------------------------
-# 📊 TAB 1: 신체데이터 (체지방/근육량 그래프 탑재)
+# 📊 TAB 1: 신체 데이터
 # ------------------------------------------
 with tab_body:
     st.header("📊 신체 데이터 & 수면 과학 로그")
@@ -132,7 +133,6 @@ with tab_body:
         
     all_m = sheet_sleep.get_all_values()
     
-    # 💡 [V9.7 업데이트] 체지방/근육량 추이 그래프
     st.write("---")
     st.subheader("📈 엘리트 바디 컴포지션 트렌드 (AI 추정치)")
     if len(all_m) > 2:
@@ -140,7 +140,6 @@ with tab_body:
         df_body['날짜'] = pd.to_datetime(df_body['날짜'])
         df_body['체중'] = df_body['공복 체중'].apply(extract_number)
         
-        # AI 수식: 엘리트 축구선수 기준 골격근량(체중*0.49) 및 기본 체지방률(11.5% 기준 변동) 추정
         df_body['추정 골격근량(kg)'] = round(df_body['체중'] * 0.49, 1)
         df_body['추정 체지방률(%)'] = round(11.5 + (df_body['체중'] - 77.5) * 0.7, 1)
         df_body['추정 체지방량(kg)'] = round(df_body['체중'] * (df_body['추정 체지방률(%)'] / 100), 1)
@@ -151,7 +150,7 @@ with tab_body:
         st.info("그래프를 생성하려면 2일 이상의 신체 데이터 누적이 필요합니다.")
 
 # ------------------------------------------
-# 🏋️ TAB 2: 운동 대시보드
+# 🏋️ TAB 2: 운동 데이터
 # ------------------------------------------
 with tab_workout:
     st.header("🧠 오늘의 트레이닝 세션 로깅")
@@ -234,7 +233,7 @@ with tab_workout:
         if st.button("💾 저장"): save_workout({"날짜": today, "공복 체중": "-", "훈련 볼륨": f"회복{rec_dist}km", "평균 심박": 0, "최대 심박": 0, "심박 회복량(HRR)": "-", "상세 훈련 내용 (SOP 및 실전 역학)": f"[휴식] 활동:{','.join(rec_act)} | 메모:{memo}", "생리학적 분석 및 영양/비고": f"RPE피로도:{post_condition}"}); st.success("저장 완료!"); st.rerun()
 
 # ------------------------------------------
-# 🥗 TAB 3: AI 식단 관리
+# 🥗 TAB 3: 식단 데이터
 # ------------------------------------------
 with tab_diet:
     st.header("🥗 영양 섭취 및 매크로 AI 매니지먼트")
@@ -263,12 +262,11 @@ with tab_diet:
             st.error("AI API 키가 없습니다.")
 
 # ------------------------------------------
-# 📈 TAB 4: AI 수석 코치 & 퍼포먼스 (상관관계 대시보드)
+# 📈 TAB 4: 데이터/리포팅 센터
 # ------------------------------------------
 with tab_report:
     st.header("📈 퍼포먼스 상관관계 및 AI 처방 센터")
     
-    # 💡 [V9.7 업데이트] 수면, 식단, 피로도(RPE)의 상관관계 시각화 그래프
     st.subheader("📊 최근 7일 회복 vs 피로도 역학 그래프")
     all_w = sheet_workout.get_all_values()
     all_s = sheet_sleep.get_all_values()
@@ -277,15 +275,12 @@ with tab_report:
         df_w = pd.DataFrame(all_w[1:], columns=all_w[0])
         df_s = pd.DataFrame(all_s[1:], columns=all_s[0])
         
-        # 날짜 통일 및 데이터 정제
         df_w['날짜'] = pd.to_datetime(df_w['날짜'])
         df_s['날짜'] = pd.to_datetime(df_s['날짜'])
         
-        # RPE 추출 (생리학적 분석 탭에서 'RPE피로도: 숫자' 추출)
         df_w['피로도(RPE)'] = df_w['생리학적 분석 및 영양/비고'].apply(extract_number)
         df_s['수면시간(h)'] = df_s['수면 시간'].apply(extract_number)
         
-        # 최근 7일 데이터 병합
         df_merged = pd.merge(df_s[['날짜', '수면시간(h)']], df_w[['날짜', '피로도(RPE)']], on='날짜', how='outer').fillna(0)
         df_recent7 = df_merged.sort_values('날짜').tail(7).set_index('날짜')
         
@@ -306,13 +301,14 @@ with tab_report:
                         
                     recent_w = all_w[-target_days:] if len(all_w) > target_days else all_w[1:]
                     recent_s = all_s[-target_days:] if len(all_s) > target_days else all_s[1:]
-                    recent_d = sheet_diet.get_all_values()[-target_days:] if len(sheet_diet.get_all_values()) > target_days else sheet_diet.get_all_values()[1:]
+                    
+                    try: recent_d = sheet_diet.get_all_values()[-target_days:] if len(sheet_diet.get_all_values()) > target_days else sheet_diet.get_all_values()[1:]
+                    except: recent_d = []
                     
                     w_context = " | ".join([f"{r[0]}(운동:{r[6]}, RPE:{r[7]})" for r in recent_w if len(r) > 7])
                     s_context = " | ".join([f"{r[0]}(수면:{r[2]}, 질:{r[3]}, 컨디션:{r[4]}, 체중:{r[1]})" for r in recent_s if len(r) > 4])
                     d_context = " | ".join([f"{r[0]}(총칼로리:{r[1]})" for r in recent_d if len(r) > 1])
                     
-                    # 💡 [V9.7 업데이트] 1-10 스케일 강제 출력 및 상관관계 분석 프롬프트 추가
                     prompt = f"""
                     너는 곽연혁 엘리트 축구 선수의 S-Tier 전담 코치야. 
                     {period_text} 데이터:
@@ -325,7 +321,7 @@ with tab_report:
                     (반드시 '퍼포먼스 스케일: X/10' 형태로 명시하고, 현재 체력 상태 및 휴식 필요성을 이유와 함께 설명)
                     
                     ### 🧬 2. 신체, 수면, 식단이 훈련에 미친 상관관계 분석
-                    (예: "수면 시간이 6시간 이하로 떨어진 다음 날 RPE 피로도가 급증했습니다", "칼로리가 부족해 하체 부하 회복이 늦습니다" 등 팩트 기반 분석)
+                    (팩트 기반 분석)
                     
                     ### 🚀 3. 다음 사이클({report_type.split(' ')[0]}) 맞춤형 훈련 & 회복 솔루션
                     (부족한 역학을 채우기 위한 디테일한 드릴 처방)
