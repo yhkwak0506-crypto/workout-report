@@ -14,7 +14,7 @@ st.set_page_config(page_title="Workout Report", layout="wide")
 # ==========================================
 # 🔒 보안 로그인 시스템
 # ==========================================
-MY_PASSWORD = "1234"
+MY_PASSWORD = "1306"
 
 if "login_success" not in st.session_state:
     st.session_state.login_success = False
