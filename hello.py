@@ -6,8 +6,7 @@ from google.oauth2.service_account import Credentials
 import requests
 import json
 
-# --- 🧠 제미나이 AI 다이렉트 통신망 (V9.3 SDK 우회 REST API 방식) ---
-# 스트림릿 서버 버그를 원천 차단하기 위해 중간 패키지 없이 구글 본서버와 직통 연결합니다.
+# --- 🧠 제미나이 AI 다이렉트 통신망 (V9.4 모델 자동 추적기 탑재) ---
 if "GEMINI_API_KEY" in st.secrets:
     GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 elif "gcp" in st.secrets and "GEMINI_API_KEY" in st.secrets["gcp"]:
@@ -20,20 +19,42 @@ HAS_AI = bool(GEMINI_API_KEY)
 def ask_gemini(prompt):
     if not HAS_AI:
         raise Exception("API 키가 없습니다. 스트림릿 Secrets를 확인하세요.")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    
+    # 💡 구글 서버가 알아듣는 모든 모델 풀네임을 준비하여 순서대로 통신을 시도합니다.
+    models_to_try = [
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-flash",
+        "gemini-1.0-pro-latest",
+        "gemini-1.0-pro",
+        "gemini-pro"
+    ]
+    
     headers = {'Content-Type': 'application/json'}
     data = {"contents": [{"parts": [{"text": prompt}]}]}
     
-    response = requests.post(url, headers=headers, json=data)
-    if response.status_code == 200:
-        return response.json()['candidates'][0]['content']['parts'][0]['text']
-    else:
-        raise Exception(f"구글 본서버 통신 에러 ({response.status_code}): {response.text}")
+    last_error = ""
+    for model_name in models_to_try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
+        response = requests.post(url, headers=headers, json=data)
+        
+        if response.status_code == 200:
+            # 성공하면 즉시 대답을 반환합니다.
+            return response.json()['candidates'][0]['content']['parts'][0]['text']
+        elif response.status_code == 404:
+            # 404(이름 못 찾음) 에러면 당황하지 않고 다음 모델 이름으로 넘어갑니다.
+            last_error = response.text
+            continue
+        else:
+            # 400(키 오류) 등 다른 에러면 즉시 중단합니다.
+            raise Exception(f"구글 본서버 통신 에러 ({response.status_code}): {response.text}")
+            
+    # 모든 이름을 다 찔러봤는데도 실패했을 경우
+    raise Exception(f"사용 가능한 AI 모델을 찾지 못했습니다. 마지막 에러: {last_error}")
 
 # ⭕ 구글 시트 주소
 MY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1N4KGhJf1ta1MOcATsOXcJayTe9ULsNGhL_9u8Rdbo_Q/edit"
 
-st.set_page_config(page_title="S-Tier Performance AMS v9.3", layout="wide")
+st.set_page_config(page_title="S-Tier Performance AMS v9.4", layout="wide")
 
 # ==========================================
 # 🔒 보안 로그인
@@ -77,7 +98,7 @@ if 'weight_sets' not in st.session_state: st.session_state.weight_sets = []
 
 today = datetime.now().strftime("%Y-%m-%d")
 
-st.title("⚡ S-Tier AI Coach System (v9.3 다이렉트 AI)")
+st.title("⚡ S-Tier AI Coach System (v9.4 끝판왕)")
 
 if not HAS_AI:
     st.warning("⚠️ 제미나이 AI 연결 대기 중... (스트림릿 Secrets에 GEMINI_API_KEY가 없습니다)")
