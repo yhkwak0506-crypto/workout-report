@@ -168,4 +168,66 @@ elif workout_type == "실전 경기":
     with col2:
         hr_avg = st.number_input("❤️ 평균 심박수", min_value=0, step=1)
         hr_max = st.number_input("🔥 최대 심박수", min_value=0, step=1)
-        hr_recovery = st.text_input("
+        hr_recovery = st.text_input("📉 심박 회복량(HRR)")
+        
+    memo = st.text_area("📝 경기 리뷰 (SOP 분석)")
+    
+    if st.button("💾 실전 경기 저장하기"):
+        sop_text = f"[{time_of_day}] {match_type} 경기 | 장소: {location} | 리뷰: {memo}"
+        analysis_text = f"웰니스(전:{pre_condition}/후:{post_condition}) | 실전 매치 데이터 반영."
+        data = {
+            "날짜": today, "공복 체중": f"{weight_today}kg", "훈련 볼륨": f"{distance}km",
+            "평균 심박": hr_avg, "최대 심박": hr_max, "심박 회복량(HRR)": hr_recovery,
+            "상세 훈련 내용 (SOP 및 실전 역학)": sop_text, "생리학적 분석 및 영양/비고": analysis_text
+        }
+        save_to_master_sheet(data)
+        st.success("구글 시트에 성공적으로 저장되었습니다!")
+        st.rerun()
+
+# --- 웨이트 트레이닝 ---
+elif workout_type == "웨이트 트레이닝":
+    st.subheader("🏋️ 웨이트 세션 기록")
+    ex_name = st.text_input("운동 이름")
+    c1, c2, c3 = st.columns(3)
+    with c1: weight = st.number_input("무게 (kg)", min_value=0.0, step=2.5)
+    with c2: reps = st.number_input("반복 횟수", min_value=0, step=1)
+    with c3: sets = st.number_input("세트 수", min_value=1, step=1)
+    if st.button("➕ 세트 추가"):
+        st.session_state.weight_sets.append({"운동명": ex_name, "무게": weight, "횟수": reps, "세트수": sets})
+
+    if st.session_state.weight_sets:
+        st.dataframe(pd.DataFrame(st.session_state.weight_sets))
+        if st.button("💾 웨이트 세션 전체 저장하기"):
+            weight_list = [f"{s['운동명']}({s['무게']}kg x {s['횟수']}회 {s['세트수']}세트)" for s in st.session_state.weight_sets]
+            sop_text = f"[{time_of_day}] " + ", ".join(weight_list)
+            data = {
+                "날짜": today, "공복 체중": f"{weight_today}kg", "훈련 볼륨": f"{len(st.session_state.weight_sets)}개 종목",
+                "평균 심박": 0, "최대 심박": 0, "심박 회복량(HRR)": "-",
+                "상세 훈련 내용 (SOP 및 실전 역학)": sop_text, "생리학적 분석 및 영양/비고": f"웰니스(전:{pre_condition}/후:{post_condition}) | 스트랭스 완료."
+            }
+            save_to_master_sheet(data)
+            st.session_state.weight_sets = [] 
+            st.success("구글 시트에 성공적으로 저장되었습니다!")
+            st.rerun()
+
+# ==========================================
+# 📊 실시간 구글 시트 라이브 데이터베이스
+# ==========================================
+st.write("---")
+st.header("📊 구글 시트 연동 라이브 데이터베이스")
+
+all_data = sheet.get_all_values()
+if len(all_data) > 1:
+    df = pd.DataFrame(all_data[1:], columns=all_data[0]).fillna("")
+    edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
+    if st.button("🔄 표 변경사항 최종 반영"):
+        sheet.clear()
+        sheet.update([edited_df.columns.values.tolist()] + edited_df.values.tolist())
+        st.success("구글 시트 원본이 업데이트되었습니다!")
+        st.rerun()
+else:
+    st.info("아직 구글 시트에 데이터가 없습니다!")
+
+if st.button("🔒 안전하게 로그아웃"):
+    st.session_state.login_success = False
+    st.rerun()
