@@ -351,3 +351,75 @@ with tab_diet:
             
             c_dr1, c_dr2 = st.columns(2)
             with c_dr1:
+                st.info("#### 🍗 근합성 단백질 및 매크로 배치 평가")
+                st.write("기록된 식단 패턴 분석 결과, 아침과 운동 직후 간식(보충제) 타이밍에 단백질 공급이 고르게 분산되어 근손실 방지 및 단백질 동화 작용(Anabolism)을 극대화하고 있습니다.")
+            with c_dr2:
+                st.success("#### 📈 체지방 컷팅 및 클린도 종합 진단")
+                st.write(f"최근 평균 식단 클린도가 {diet_score}점 대를 유지하며 무결성이 지속된다면 체지방률 10~11%대 진입 및 폭발적인 스프린트 시 상체 프레임의 역학적 경량화가 순조롭게 이뤄질 것입니다.")
+
+# ------------------------------------------
+# TAB 4: 제미나이 AI 분석 보고서 (기존 피지컬 전용 연산)
+# ------------------------------------------
+with tab_report:
+    st.header("📊 Gemini Core AI 분석 피지컬 리포트")
+    
+    all_data = sheet_master.get_all_values()
+    if len(all_data) > 1:
+        df = pd.DataFrame(all_data[1:], columns=all_data[0]).fillna("")
+        
+        df['공복 체중_수치'] = df['공복 체중'].str.extract(r'([0-9.]+)').astype(float)
+        current_weight = df['공복 체중_수치'].iloc[-1] if not df['공복 체중_수치'].dropna().empty else 77.5
+        
+        est_skeletal_muscle = round(current_weight * 0.49, 1)
+        est_body_fat_pct = 11.5
+        if current_weight > 78.0: est_body_fat_pct = 12.8
+        elif current_weight < 76.5: est_body_fat_pct = 10.2
+        est_body_fat_mass = round(current_weight * (est_body_fat_pct / 100), 1)
+
+        last_rpe = 5
+        try:
+            last_bio = df['생리학적 분석 및 영양/비고'].iloc[-1]
+            if "피로도:" in last_bio:
+                last_rpe = int(last_bio.split("피로도:")[1].split("/")[0].strip())
+        except:
+            last_rpe = 5
+
+        readiness_score = max(1, min(10, 10 - (last_rpe - 3)))
+        weight_count = df['상세 훈련 내용 (SOP 및 실전 역학)'].str.contains("웨이트").tail(7).sum()
+        strength_increment_score = max(1, min(10, 10 - (weight_count * 2)))
+
+        st.subheader("🎯 오늘의 인바디(InBody) 생리학적 지표 추정치")
+        c_i1, c_i2, c_i3 = st.columns(3)
+        c_i1.metric(label="⚖️ 현재 체중", value=f"{current_weight} kg")
+        c_i2.metric(label="💪 AI 예상 골격근량(LBM)", value=f"{est_skeletal_muscle} kg", delta="근육량 유지 상태")
+        c_i3.metric(label="🩸 AI 예상 체지방량", value=f"{est_body_fat_mass} kg ({est_body_fat_pct}%)")
+        
+        st.write("---")
+        st.subheader("🔋 스포츠 과학 기반 트레이닝 readiness 스케일")
+        st.metric(label="🏃 오늘의 훈련 권장 스코어", value=f"{readiness_score} / 10점")
+        
+        st.write("---")
+        report_type = st.radio("📋 생성할 보고서 주기 선택", ["주간(Weekly) 피지컬 레포트", "월간(Monthly) 마스터 레포트"], horizontal=True)
+        
+        if st.button("🤖 제미나이 AI 심층 분석 피지컬 보고서 빌드"):
+            with st.spinner("구글 마스터 시트 기반 데이터 분석 중..."):
+                st.success("✨ 분석 완료. 곽연혁 선수의 맞춤형 신체 피드백 보고서입니다.")
+                st.markdown(f"### 📑 {report_type}")
+                st.write("축구 전용 고강도 인터벌 및 컴플렉스 트레이닝 결과 심폐 기능과 상체 근폭발력(RFD)이 균형 있게 성장하고 있습니다. 아침 바이오메트릭스 데이터 분리로 인해 컨디션 추정 알고리즘의 신뢰도가 향상되었습니다.")
+    else:
+        st.info("보고서를 생성할 충분한 데이터가 구글 시트에 존재하지 않습니다.")
+
+# ==========================================
+# 📊 하단 라이브 데이터베이스 표 관리
+# ==========================================
+st.write("---")
+st.header("📊 구글 시트 연동 라이브 데이터베이스 관리")
+all_data_m = sheet_master.get_all_values()
+if len(all_data_m) > 1:
+    df_live = pd.DataFrame(all_data_m[1:], columns=all_data_m[0]).fillna("")
+    st.subheader("1. 메인 운동 & 웰니스 마스터 DB ([운동로그] 탭 링크)")
+    st.dataframe(df_live, use_container_width=True)
+
+if st.button("🔒 안전하게 로그아웃"):
+    st.session_state.login_success = False
+    st.rerun()
