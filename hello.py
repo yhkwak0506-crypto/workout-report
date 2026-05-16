@@ -3,36 +3,37 @@ import pandas as pd
 from datetime import datetime, date, time, timedelta
 import gspread
 from google.oauth2.service_account import Credentials
-import os
+import requests
+import json
 
-# --- 🧠 제미나이 AI 두뇌 연결 세팅 (V9.2 범용 모델명 gemini-pro 적용) ---
-try:
-    import google.generativeai as genai
+# --- 🧠 제미나이 AI 다이렉트 통신망 (V9.3 SDK 우회 REST API 방식) ---
+# 스트림릿 서버 버그를 원천 차단하기 위해 중간 패키지 없이 구글 본서버와 직통 연결합니다.
+if "GEMINI_API_KEY" in st.secrets:
+    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+elif "gcp" in st.secrets and "GEMINI_API_KEY" in st.secrets["gcp"]:
+    GEMINI_API_KEY = st.secrets["gcp"]["GEMINI_API_KEY"]
+else:
+    GEMINI_API_KEY = ""
+
+HAS_AI = bool(GEMINI_API_KEY)
+
+def ask_gemini(prompt):
+    if not HAS_AI:
+        raise Exception("API 키가 없습니다. 스트림릿 Secrets를 확인하세요.")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    headers = {'Content-Type': 'application/json'}
+    data = {"contents": [{"parts": [{"text": prompt}]}]}
     
-    if "GEMINI_API_KEY" in st.secrets:
-        GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
-    elif "gcp" in st.secrets and "GEMINI_API_KEY" in st.secrets["gcp"]:
-        GEMINI_API_KEY = st.secrets["gcp"]["GEMINI_API_KEY"]
+    response = requests.post(url, headers=headers, json=data)
+    if response.status_code == 200:
+        return response.json()['candidates'][0]['content']['parts'][0]['text']
     else:
-        GEMINI_API_KEY = ""
-
-    if GEMINI_API_KEY:
-        genai.configure(api_key=GEMINI_API_KEY)
-        # 💡 에러 원인 해결: 가장 안정적인 범용 텍스트 모델명으로 변경!
-        model = genai.GenerativeModel('gemini-pro')
-        HAS_AI = True
-        AI_ERROR = ""
-    else:
-        HAS_AI = False
-        AI_ERROR = "스트림릿 금고(Secrets)에서 API 키를 찾지 못했습니다."
-except Exception as e:
-    HAS_AI = False
-    AI_ERROR = f"AI 로딩 에러: {str(e)}"
+        raise Exception(f"구글 본서버 통신 에러 ({response.status_code}): {response.text}")
 
 # ⭕ 구글 시트 주소
 MY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1N4KGhJf1ta1MOcATsOXcJayTe9ULsNGhL_9u8Rdbo_Q/edit"
 
-st.set_page_config(page_title="S-Tier Performance AMS v9.2", layout="wide")
+st.set_page_config(page_title="S-Tier Performance AMS v9.3", layout="wide")
 
 # ==========================================
 # 🔒 보안 로그인
@@ -76,10 +77,10 @@ if 'weight_sets' not in st.session_state: st.session_state.weight_sets = []
 
 today = datetime.now().strftime("%Y-%m-%d")
 
-st.title("⚡ S-Tier AI Coach System (v9.2)")
+st.title("⚡ S-Tier AI Coach System (v9.3 다이렉트 AI)")
 
 if not HAS_AI:
-    st.warning(f"⚠️ 제미나이 AI 연결 대기 중... (에러 원인: {AI_ERROR})")
+    st.warning("⚠️ 제미나이 AI 연결 대기 중... (스트림릿 Secrets에 GEMINI_API_KEY가 없습니다)")
 
 tab_morning, tab_workout, tab_diet, tab_report = st.tabs([
     "🌅 모닝 바이오메트릭스", "🏋️ 운동 대시보드", "🥗 AI 식단 관리", "📊 AI 수석 코치 레포트"
@@ -243,17 +244,16 @@ with tab_diet:
                 만약 빈칸이면 0kcal로 계산해.
                 """
                 try:
-                    response = model.generate_content(prompt)
-                    ai_total_kcal = response.text.strip()
-                except:
-                    ai_total_kcal = "AI계산오류"
+                    ai_total_kcal = ask_gemini(prompt).strip()
+                except Exception as e:
+                    ai_total_kcal = f"계산오류({e})"
                 
                 diet_row = [today, ai_total_kcal, breakfast, lunch, dinner, snacks, night]
                 sheet_diet.append_row(diet_row)
                 st.success(f"🎉 AI 계산 완료! 오늘 예상 섭취량은 **{ai_total_kcal}** 입니다. [식단로그]에 단독 저장되었습니다.")
                 st.rerun()
         else:
-            st.error(f"AI API가 연결되지 않아 직접 시트에 텍스트만 저장합니다. (에러: {AI_ERROR})")
+            st.error("AI API 키가 없습니다. 직접 텍스트만 저장합니다.")
             sheet_diet.append_row([today, "AI미연결", breakfast, lunch, dinner, snacks, night])
             st.rerun()
             
@@ -293,13 +293,13 @@ with tab_report:
                     (1: 완전 풀트레이닝 가능 ~ 10: 강제 휴식 요망. 숫자 스케일과 함께 이유 설명)
                     """
                     
-                    report_response = model.generate_content(prompt)
+                    report_text = ask_gemini(prompt)
                     st.success("✨ 수석 코치의 데이터 분석 처방전이 도착했습니다.")
-                    st.markdown(report_response.text)
+                    st.markdown(report_text)
                 except Exception as e:
                     st.error(f"AI 코치 호출 중 에러 발생: {e}")
         else:
-            st.error(f"⚠️ AI 코치를 호출하려면 먼저 API 오류를 해결해야 합니다! (에러: {AI_ERROR})")
+            st.error("⚠️ AI 코치를 호출하려면 먼저 API 오류를 해결해야 합니다!")
 
 st.write("---")
 if st.button("🔒 안전하게 로그아웃"):
