@@ -141,7 +141,6 @@ with tab_body:
         
     all_m = get_cached_data("sleep")
     
-    # 💡 [V10.2] 신체 데이터 라이브 수정 기능
     st.write("---")
     st.subheader("🛠️ 신체 데이터베이스 (실시간 수정 가능)")
     st.info("표 안의 글자를 더블클릭해서 자유롭게 수정한 뒤, 아래의 덮어쓰기 버튼을 누르면 구글 시트에 반영됩니다.")
@@ -155,7 +154,6 @@ with tab_body:
             st.success("구글 시트 원본이 완벽하게 수정되었습니다!")
             st.rerun()
 
-        # 그래프
         df_body['날짜'] = pd.to_datetime(df_body['날짜'], errors='coerce')
         df_body = df_body.dropna(subset=['날짜'])
         df_body['체중'] = df_body['공복 체중'].apply(extract_number)
@@ -253,7 +251,6 @@ with tab_workout:
 
     all_w = get_cached_data("workout")
     
-    # 💡 [V10.2] 운동 데이터 라이브 수정 기능
     st.write("---")
     st.subheader("🛠️ 운동 데이터베이스 (실시간 수정 가능)")
     st.info("운동 볼륨을 깜빡하셨나요? 표 안을 더블클릭해서 바로 수정하고 아래 버튼을 누르세요.")
@@ -268,11 +265,11 @@ with tab_workout:
             st.rerun()
 
 # ------------------------------------------
-# 🥗 TAB 3: 식단 데이터 (실시간 반응형 AI 코치)
+# 🥗 TAB 3: 식단 데이터
 # ------------------------------------------
 with tab_diet:
     st.header("🥗 영양 섭취 및 실시간 매크로 코칭")
-    st.info("💡 식사를 순서대로 적어보세요. 버튼을 누르면 AI가 오늘의 운동량과 지금까지 먹은 것을 계산해 '다음 식사'를 추천해 줍니다!")
+    st.info("💡 식사를 순서대로 적어보세요. 버튼을 누르면 AI가 오늘의 운동량과 지금까지 먹은 것을 계산해 '다음 식사'를 합리적으로 추천해 줍니다!")
     
     col_d1, col_d2 = st.columns(2)
     with col_d1:
@@ -283,7 +280,6 @@ with tab_diet:
         dinner = st.text_area("🌙 저녁 식단 (먹은 후 적어주세요)", height=80)
         snacks = st.text_area("🥤 간식/보충제", height=80)
         
-    # 오늘의 운동량 불러오기 (식단 추천을 위함)
     all_w_for_diet = get_cached_data("workout")
     today_w_str = "아직 기록된 오늘의 운동이 없습니다."
     if len(all_w_for_diet) > 1:
@@ -291,23 +287,28 @@ with tab_diet:
         if today_w:
             today_w_str = " | ".join([f"볼륨:{r[2]}, 내용:{r[6]}" for r in today_w])
 
-    # 💡 [V10.2 업데이트] 실시간 AI 영양 코치 버튼
+    # 💡 [V10.3 업데이트] 호들갑 금지 및 현실적인 칼로리 분배 프롬프트
     if st.button("🧠 현재까지의 식단 분석 및 [다음 식사] 추천받기"):
         if HAS_AI:
             with st.spinner("오늘의 훈련량과 지금까지의 식단을 분석하여 다음 식사 매크로를 계산 중입니다..."):
                 prompt = f"""
-                너는 엘리트 축구 선수의 전담 스포츠 영양사야.
-                [오늘 수행한 훈련량]: {today_w_str}
-                [오늘 지금까지 섭취한 식단]
-                - 아침: {breakfast if breakfast else '안먹음'}
-                - 점심: {lunch if lunch else '안먹음'}
-                - 저녁: {dinner if dinner else '안먹음'}
-                - 간식: {snacks if snacks else '안먹음'}
+                너는 곽연혁 엘리트 축구 선수의 전담 스포츠 영양사야. 
+                선수가 하루 일과 중 시간에 맞춰 식단을 순차적으로 기록하고 있어.
                 
-                요청사항:
-                1. 지금까지 섭취한 식단의 대략적인 칼로리와 단백질/탄수화물 분석.
-                2. 오늘의 훈련량을 고려하여 '아직 안 먹은 다음 식사(빈칸인 식사)'에 채워야 할 필수 칼로리와 단백질/탄수화물(g) 목표량 계산.
-                3. 그 목표량에 딱 맞는 현실적이고 구체적인 식단(메뉴) 3가지 추천.
+                [오늘 수행한 훈련량/예정 훈련량]: {today_w_str}
+                
+                [현재까지 섭취한 식단]
+                - 아침: {breakfast if breakfast else '기록없음 (아직 안먹음)'}
+                - 점심: {lunch if lunch else '기록없음 (아직 안먹음)'}
+                - 저녁: {dinner if dinner else '기록없음 (아직 안먹음)'}
+                - 간식/보충제: {snacks if snacks else '기록없음 (아직 안먹음)'}
+                - 야식: {night if night else '기록없음 (아직 안먹음)'}
+                
+                [가이드라인 - 반드시 엄격하게 지킬 것]
+                1. 경고 및 호들갑 금지: 아직 기록이 없는 식사칸은 단순히 '아직 시간이 안 되어서 안 먹은 것'이야. 따라서 "현재 영양이 심각하게 부족하다", "우려된다" 같은 부정적인 피드백이나 호들갑을 절대 금지해.
+                2. 지금까지 먹은 식단(내용이 있는 식단)의 대략적인 총 칼로리와 매크로(탄/단/지)를 분석해줘.
+                3. 현실적인 분배: 엘리트 선수로서 하루 필요한 '총 권장 칼로리'에서 지금까지 먹은 칼로리를 뺀 '남은 필요 칼로리'를 계산해. 그리고 이 남은 칼로리를 당장 다음 한 끼에 무식하게 다 때려 넣지 말고, 아직 안 먹은 남은 식사들(점심, 저녁, 간식 등)에 현실적인 비율로 쪼개서 분배해.
+                4. 분배된 결과를 바탕으로, 선수가 당장 먹어야 할 '바로 다음 끼니'의 목표 칼로리와 탄/단/지 목표량(g)을 설정하고, 현실적인 추천 식단 메뉴 3가지를 구체적으로 제시해줘.
                 """
                 try: 
                     ai_diet_coach_response = ask_gemini(prompt)
@@ -332,7 +333,6 @@ with tab_diet:
 
     all_d = get_cached_data("diet")
     
-    # 💡 [V10.2] 식단 데이터 라이브 수정 기능
     st.write("---")
     st.subheader("🛠️ 식단 데이터베이스 (실시간 수정 가능)")
     if len(all_d) > 1:
@@ -389,7 +389,6 @@ with tab_report:
                     s_context = " | ".join([f"{r[0]}(수면:{r[2]}, 질:{r[3]}, 아침컨디션:{r[4]}, 체중:{r[1]})" for r in recent_s if len(r) > 4])
                     d_context = " | ".join([f"{r[0]}(총칼로리:{r[1]})" for r in recent_d if len(r) > 1])
                     
-                    # 💡 [V10.2 업데이트] 식단에 따른 운동 추천 로직 강화
                     prompt = f"""
                     너는 곽연혁 엘리트 축구 선수의 S-Tier 전담 코치야. 
                     {period_text} 데이터:
