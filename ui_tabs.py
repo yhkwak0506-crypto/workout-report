@@ -129,14 +129,18 @@ def render_workout_tab(today: str, bootcamp_mode: bool):
             location = st.text_input("📍 장소", "전주 용와초등학교 잔디구장", key="football_loc")
             c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
             
-            # 💡 [V13.8] 프리킥 포함 완벽 업데이트!
+            # 💡 [V13.9 업데이트] 요청하신 신체 예열 루틴, 신규 하프코트 인터벌 장착 및 25/15 수정 완료
             drill_options = [
+                "웜업 조깅",
+                "웜업 볼마스터리 (드리블 벽패스 가벼운 슈팅 공중볼 이동컨트롤)",
                 "40/20 풀코트 인터벌", 
                 "40/20 하프라인 인터벌", 
-                "25/20 페널티박스 인터벌", 
+                "40/20 하프코트 인터벌",
+                "25/15 페널티박스 인터벌", 
                 "15/5 드리블 슈팅 믹스 인터벌", 
                 "15/15 매스템포런",
-                "프리킥 (세트 사이)" 
+                "프리킥 (세트 사이)",
+                "쿨다운 조깅"
             ]
             with c1: drill = st.selectbox("📋 종목", drill_options, key="football_drill")
             with c2: reps = st.number_input("횟수", min_value=1, step=1, key="football_reps")
@@ -292,7 +296,7 @@ def render_report_tab():
         df_s = pd.DataFrame(all_s[1:], columns=all_s[0])
         df_s['날짜'] = pd.to_datetime(df_s['날짜'], errors='coerce')
         df_s = df_s.dropna(subset=['날짜'])
-        df_s['컨디션스코어(1-10)'] = df_s['신체 컨디션'].apply(utils.extract_number)
+        df_s['CON_SCORE'] = df_s['신체 컨디션'].apply(utils.extract_number)
         
         df_w = pd.DataFrame(all_w[1:], columns=all_w[0])
         df_w['날짜'] = pd.to_datetime(df_w['날짜'], errors='coerce')
@@ -308,9 +312,9 @@ def render_report_tab():
         df_w['훈련강도(1-10)'] = df_w.apply(get_saved_intensity, axis=1)
         df_w_max = df_w.groupby('날짜')['훈련강도(1-10)'].max().reset_index()
         
-        df_merged = pd.merge(df_s[['날짜', '컨디션스코어(1-10)']], df_w_max[['날짜', '훈련강도(1-10)']], on='날짜', how='outer').fillna(0).sort_values('날짜')
+        df_merged = pd.merge(df_s[['날짜', 'CON_SCORE']], df_w_max[['날짜', '훈련강도(1-10)']], on='날짜', how='outer').fillna(0).sort_values('날짜')
         
-        valid_report = df_merged[(df_merged['컨디션스코어(1-10)'] > 0) | (df_merged['훈련강도(1-10)'] > 0)].copy()
+        valid_report = df_merged[(df_merged['CON_SCORE'] > 0) | (df_merged['훈련강도(1-10)'] > 0)].copy()
         
         if not valid_report.empty:
             df_melt = valid_report.melt('날짜', var_name='종류', value_name='점수')
@@ -327,7 +331,7 @@ def render_report_tab():
                         scale=alt.Scale(domain=[min_view_str, max_date_str], nice=False)
                        ),
                 y=alt.Y('점수:Q', title="점수 (1-10)", scale=alt.Scale(domain=[0, 10])),
-                color=alt.Color('종류:N', scale=alt.Scale(domain=['컨디션스코어(1-10)', '훈련강도(1-10)'], range=['#1f77b4', '#ff7f0e'])),
+                color=alt.Color('종류:N', scale=alt.Scale(domain=['CON_SCORE', '훈련강도(1-10)'], range=['#1f77b4', '#ff7f0e'])),
                 tooltip=[alt.Tooltip('날짜:T', title="날짜", format="%Y-%m-%d"), alt.Tooltip('종류:N'), alt.Tooltip('점수:Q')]
             ).properties(height=350).interactive(bind_y=False)
             
