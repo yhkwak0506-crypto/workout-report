@@ -129,7 +129,7 @@ def render_workout_tab(today: str, bootcamp_mode: bool):
             location = st.text_input("📍 장소", "전주 용와초등학교 잔디구장", key="football_loc")
             c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
             
-            # 💡 [V13.6 업데이트] 요청하신 실전 훈련 5종목 리스트로 완벽 교체
+            # 💡 [핵심] 연혁님의 전용 인터벌 종목 리스트
             drill_options = [
                 "40/20 풀코트 인터벌", 
                 "40/20 하프라인 인터벌", 
@@ -312,14 +312,13 @@ def render_report_tab():
         valid_report = df_merged[(df_merged['컨디션스코어(1-10)'] > 0) | (df_merged['훈련강도(1-10)'] > 0)].copy()
         
         if not valid_report.empty:
-            valid_report = valid_report.tail(15)
-            min_date = valid_report['날짜'].min()
-            max_date = valid_report['날짜'].max()
-            
             df_melt = valid_report.melt('날짜', var_name='종류', value_name='점수')
             
+            max_date = df_melt['날짜'].max()
+            min_view_date = max_date - timedelta(days=15)
+            
             max_date_str = max_date.strftime('%Y-%m-%d')
-            min_view_str = (max_date - timedelta(days=15)).strftime('%Y-%m-%d')
+            min_view_str = min_view_date.strftime('%Y-%m-%d')
             
             line_chart = alt.Chart(df_melt).mark_line(point=True).encode(
                 x=alt.X('날짜:T', 
@@ -350,7 +349,6 @@ def render_report_tab():
                 w_ctx = " | ".join([f"{r[0]}({r[6]}) 코멘트:{r[7]}" for r in (aw[-target_days:] if len(aw)>target_days else aw[1:]) if len(r)>7])
                 s_ctx = " | ".join([f"{r[0]}(수면:{r[2]}, 컨디션:{r[4]})" for r in (a_s[-target_days:] if len(a_s)>target_days else a_s[1:]) if len(r)>4])
                 
-                # 💡 [V13.6 업데이트] 최종 분석 리포트 발행 시에도 ai_service의 훈련 도감을 읽게 만듦
                 prompt = f"""
                 수석 피지컬 코치야. 목표: 2027년 말 전역 직후 아일랜드, 덴마크, 스웨덴, 노르웨이 1~2부 리그 진출.
                 {ai.TRAINING_DICT}
