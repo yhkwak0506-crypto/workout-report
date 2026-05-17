@@ -6,35 +6,30 @@ import utils
 import db_service as db
 import ai_service as ai
 
-# 💡 [V13.3 핵심 업데이트] 무한 줌아웃 버그를 일으키던 interactive() 제거 및 최근 15개 데이터 고정
+# 💡 [V13.4 핵심 업데이트] nice=False를 추가하여 날짜 축이 마음대로 늘어나는 현상 원천 차단
 def render_line_chart(df: pd.DataFrame, x_col: str, y_col: str, color: str, title: str):
     st.markdown(f"##### {title}")
     
-    # 0보다 큰 '진짜 유효한 데이터'만 걸러냄
-    valid_df = df[df[y_col] > 0]
-    
+    valid_df = df[df[y_col] > 0].copy()
     if valid_df.empty:
         st.info("차트를 그릴 데이터가 없습니다.")
         return
 
-    # 💡 사용자 요청 반영: X축 최대 15개로 제한 (가장 최근 15개)
-    valid_df = valid_df.tail(15)
-    
-    # 데이터 구간의 시작과 끝을 타이트하게 잡아줌
-    min_date = valid_df[x_col].min()
-    max_date = valid_df[x_col].max()
+    valid_df = valid_df.sort_values(x_col)
+    view_df = valid_df.tail(15) # 최근 15개 
 
-    chart = alt.Chart(valid_df).mark_line(point=True).encode(
+    min_date = view_df[x_col].min()
+    max_date = view_df[x_col].max()
+
+    chart = alt.Chart(view_df).mark_line(point=True).encode(
         x=alt.X(f'{x_col}:T', 
                 title="날짜",
-                # 💡 X축을 실제 데이터가 있는 구간으로 콘크리트 고정
-                scale=alt.Scale(domain=[min_date, max_date])
+                # 💡 핵심 수정: nice=False 로 설정하여 3월, 8월 등 빈 날짜 렌더링 방지
+                scale=alt.Scale(domain=[min_date, max_date], nice=False, clamp=True)
                ),
-        # 💡 Y축은 무조건 0부터 시작하도록 고정
         y=alt.Y(f'{y_col}:Q', title=y_col, scale=alt.Scale(domainMin=0)),
         tooltip=[alt.Tooltip(x_col, title="날짜"), alt.Tooltip(y_col, title=y_col)]
-    ).properties(height=300).configure_mark(color=color)
-    # .interactive() 코드를 완전히 삭제하여 마우스 휠 줌아웃 버그 원천 차단!
+    ).properties(height=300).configure_mark(color=color).interactive(bind_y=False)
     
     st.altair_chart(chart, use_container_width=True)
 
@@ -77,7 +72,6 @@ def render_body_tab(today: str):
         df_s['날짜'] = pd.to_datetime(df_s['날짜'], errors='coerce')
         df_s = df_s.dropna(subset=['날짜'])
         df_s['체중'] = df_s['공복 체중'].apply(utils.extract_number)
-        df_s = df_s.sort_values('날짜')
         
         if not df_s.empty:
             df_s['추정 골격근량'] = round(df_s['체중'] * 0.49, 1)
@@ -93,10 +87,13 @@ def render_body_tab(today: str):
                     fb = ai.get_body_feedback(df_s['체중'].iloc[-1], df_s['추정 골격근량'].iloc[-1], df_s['추정 체지방률'].iloc[-1], df_s['추정 체지방량'].iloc[-1])
                     st.info(fb)
             
-            render_line_chart(df_s, '날짜', '체중', '#1f77b4', '⚖️ 체중 (kg)')
-            render_line_chart(df_s, '날짜', '추정 골격근량', '#2ca02c', '💪 근육량 (kg)')
-            render_line_chart(df_s, '날짜', '추정 체지방량', '#ff7f0e', '🩸 체지방량 (kg)')
-            render_line_chart(df_s, '날짜', '수면시간(h)', '#9467bd', '💤 수면 시간 (h)')
+            c1, c2 = st.columns(2)
+            with c1: render_line_chart(df_s, '날짜', '체중', '#1f77b4', '⚖️ 체중 (kg)')
+            with c2: render_line_chart(df_s, '날짜', '추정 골격근량', '#2ca02c', '💪 근육량 (kg)')
+            
+            c3, c4 = st.columns(2)
+            with c3: render_line_chart(df_s, '날짜', '추정 체지방량', '#ff7f0e', '🩸 체지방량 (kg)')
+            with c4: render_line_chart(df_s, '날짜', '수면시간(h)', '#9467bd', '💤 수면 시간 (h)')
 
 def render_workout_tab(today: str, bootcamp_mode: bool):
     st.header("🧠 오늘의 트레이닝 세션 로깅")
@@ -302,29 +299,29 @@ def render_report_tab():
         
         df_merged = pd.merge(df_s[['날짜', '컨디션스코어(1-10)']], df_w_max[['날짜', '훈련강도(1-10)']], on='날짜', how='outer').fillna(0).sort_values('날짜')
         
-        # 💡 [V13.3] 리포트 탭 차트 역시 최근 15개 고정 및 무한 줌아웃 버그 제거
-        valid_report = df_merged[(df_merged['컨디션스코어(1-10)'] > 0) | (df_merged['훈련강도(1-10)'] > 0)]
-        valid_report = valid_report.tail(15)
+        valid_report = df_merged[(df_merged['컨디션스코어(1-10)'] > 0) | (df_merged['훈련강도(1-10)'] > 0)].copy()
         
         if not valid_report.empty:
+            valid_report = valid_report.tail(15)
             min_date = valid_report['날짜'].min()
             max_date = valid_report['날짜'].max()
             
             df_melt = valid_report.melt('날짜', var_name='종류', value_name='점수')
             
+            # 💡 핵심 수정: nice=False 적용 및 무한 줌아웃 방지
             line_chart = alt.Chart(df_melt).mark_line(point=True).encode(
                 x=alt.X('날짜:T', 
                         title='날짜',
-                        scale=alt.Scale(domain=[min_date, max_date]) # 💡 데이터 구간 100% 고정
+                        scale=alt.Scale(domain=[min_date, max_date], nice=False, clamp=True) 
                        ),
-                y=alt.Y('점수:Q', title="점수 (1-10)", scale=alt.Scale(domain=[0, 10])), # 0~10점 스케일 고정
+                y=alt.Y('점수:Q', title="점수 (1-10)", scale=alt.Scale(domain=[0, 10])),
                 color=alt.Color('종류:N', scale=alt.Scale(domain=['컨디션스코어(1-10)', '훈련강도(1-10)'], range=['#1f77b4', '#ff7f0e'])),
                 tooltip=[alt.Tooltip('날짜:T', title="날짜"), alt.Tooltip('종류:N'), alt.Tooltip('점수:Q')]
-            ).properties(height=350)
+            ).properties(height=350).interactive(bind_y=False)
             
             st.altair_chart(line_chart, use_container_width=True)
         else:
-            st.info("차트를 그릴 데이터가 부족합니다.")
+            st.info("차트를 그릴 유효한 데이터가 없습니다.")
     else:
         st.info("최소 2일 이상의 신체 및 운동 데이터 누적이 필요합니다.")
 
