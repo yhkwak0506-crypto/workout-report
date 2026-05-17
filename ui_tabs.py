@@ -6,26 +6,35 @@ import utils
 import db_service as db
 import ai_service as ai
 
-# 💡 [V13.1 업데이트] 차트 함수 수정: X축의 domain을 ['data', None]으로 설정하여
-# 줌아웃 시 데이터가 존재하는 첫날 이전으로는 갈 수 없도록 경계를 설정함.
+# 💡 [V13.2 핵심 업데이트] 유효한 숫자가 있는 첫날을 찾아 X축 하한선을 콘크리트로 고정하는 함수
 def render_line_chart(df: pd.DataFrame, x_col: str, y_col: str, color: str, title: str):
     st.markdown(f"##### {title}")
     
-    # 데이터가 비어있으면 차트를 그리지 않음
     if df.empty:
         st.info("차트를 그릴 데이터가 없습니다.")
         return
 
-    # Altair 차트 정의
+    # 💡 [V13.2] 하한선 버그 원천 차단 로직
+    # 데이터프레임 내에서 해당 수치(y_col)가 0보다 큰 '진짜 유효한 데이터'의 날짜만 필터링
+    valid_df = df[df[y_col] > 0]
+    
+    if not valid_df.empty:
+        # 실제 숫자가 찍힌 날 중 가장 오래된 첫날을 찾아 타임스탬프로 변환
+        first_valid_date = valid_df[x_col].min()
+        # 스트림릿 호환을 위해 밀리초 단위 타임스탬프로 변환
+        min_timestamp = int(first_valid_date.timestamp() * 1000)
+        x_scale = alt.Scale(domain=[min_timestamp, None])
+    else:
+        x_scale = alt.Scale(domain=['data', None])
+
     chart = alt.Chart(df).mark_line(point=True).encode(
         x=alt.X(f'{x_col}:T', 
                 title="날짜",
-                # 💡 핵심 수정: 데이터가 있는 구간만 줌/팬 허용 (데이터 이전 과거로 줌아웃 불가)
-                scale=alt.Scale(domain=['data', None])
+                scale=x_scale # 💡 유효 데이터 첫날 이전 과거로 절대 줌아웃 불가
                ),
-        y=alt.Y(f'{y_col}:Q', title=y_col, scale=alt.Scale(domainMin=0)), # Y축은 0 고정
+        y=alt.Y(f'{y_col}:Q', title=y_col, scale=alt.Scale(domainMin=0)),
         tooltip=[alt.Tooltip(x_col, title="날짜"), alt.Tooltip(y_col, title=y_col)]
-    ).properties(height=300).configure_mark(color=color).interactive(bind_y=False) # X축 줌/팬 활성화
+    ).properties(height=300).configure_mark(color=color).interactive(bind_y=False)
     
     st.altair_chart(chart, use_container_width=True)
 
@@ -68,7 +77,7 @@ def render_body_tab(today: str):
         df_s['날짜'] = pd.to_datetime(df_s['날짜'], errors='coerce')
         df_s = df_s.dropna(subset=['날짜'])
         df_s['체중'] = df_s['공복 체중'].apply(utils.extract_number)
-        df_s = df_s[df_s['체중'] > 0].sort_values('날짜') # 스케일링 제한 해제: 첫날부터 보기 위해
+        df_s = df_s.sort_values('날짜')
         
         if not df_s.empty:
             df_s['추정 골격근량'] = round(df_s['체중'] * 0.49, 1)
@@ -79,13 +88,7 @@ def render_body_tab(today: str):
             st.write("---")
             st.subheader("📈 바디 컴포지션 멀티 대시보드")
             
-            # [V13.1] 북유럽 리그 기준 피지컬 진단 코멘트는 주석 처리 (에러 방지용)
-            # if st.button("🤖 AI 유럽리그 기준 피지컬 진단", key="ai_body_diag"):
-            #     with st.spinner("목표 리그 데이터와 대조 중..."):
-            #         fb = ai.get_body_feedback(df_s['체중'].iloc[-1], df_s['추정 골격근량'].iloc[-1], df_s['추정 체지방률'].iloc[-1], df_s['추정 체지방량'].iloc[-1])
-            #         st.info(fb)
-            
-            # 개선된 차트 함수 호출
+            # 개선된 고정 차트 엔진 출력
             render_line_chart(df_s, '날짜', '체중', '#1f77b4', '⚖️ 체중 (kg)')
             render_line_chart(df_s, '날짜', '추정 골격근량', '#2ca02c', '💪 근육량 (kg)')
             render_line_chart(df_s, '날짜', '추정 체지방량', '#ff7f0e', '🩸 체지방량 (kg)')
@@ -93,7 +96,7 @@ def render_body_tab(today: str):
 
 def render_workout_tab(today: str, bootcamp_mode: bool):
     st.header("🧠 오늘의 트레이닝 세션 로깅")
-    m_weight_display = st.number_input("⚖️ 오늘의 공복 체중 연동 (kg)", value=st.session_state.get("master_weight", 77.5), step=0.1, key="workout_weight_連動")
+    m_weight_display = st.number_input("⚖️ 오늘의 공복 체중 연동 (kg)", value=st.session_state.get("master_weight", 77.5), step=0.1, key="workout_weight_연동")
 
     if bootcamp_mode:
         st.subheader("🪖 제31사단 훈련소 일과")
@@ -196,7 +199,7 @@ def render_workout_tab(today: str, bootcamp_mode: bool):
             details_str = f"[{time_of_day}] {rec_act}"
 
         st.write("---")
-        st.subheader("🫀 생리학적 부하 및 피드백")
+        st.subheader("🪖 생리학적 부하 및 피드백")
         if is_not_sure: h_avg, h_max, hrr_2m = 0, 0, "-"
         else:
             col_h1, col_h2, col_h3 = st.columns(3)
@@ -241,7 +244,7 @@ def render_diet_tab(today: str, bootcamp_mode: bool):
     if bootcamp_mode:
         bc_meal_select = st.radio("🍴 해당 식사 선택", ["아침 병영식 정량", "점심 병영식 정량", "저녁 병영식 정량", "PX 군것질/증식"], key="bootcamp_meal_radio")
         if st.button("💾 훈련소 식사 원클릭 등록", key="save_bootcamp_meal_btn"):
-            col_map = {"아침 병영식 정량": 3, "점심 병영식 정량": 4, "저녁 병영식 정량": 5, "PX 군것질/증식": 6}
+            col_map = {"아침 병영식 정량": 3, "점심 병영식 정량", 4: 4, "저녁 병영식 정량": 5, "PX 군것질/증식": 6}
             db.save_single_meal(today, col_map[bc_meal_select], f"{bc_meal_select} 섭취 완료 | AI 분석: 950kcal")
             st.success("훈련소 급식 저장 성공!"); st.rerun()
     else:
@@ -293,21 +296,27 @@ def render_report_tab():
         df_w['훈련강도(1-10)'] = df_w.apply(get_saved_intensity, axis=1)
         df_w_max = df_w.groupby('날짜')['훈련강도(1-10)'].max().reset_index()
         
-        # 스케일링 제한 해제 (첫날부터 보기)
         df_merged = pd.merge(df_s[['날짜', '컨디션스코어(1-10)']], df_w_max[['날짜', '훈련강도(1-10)']], on='날짜', how='outer').fillna(0).sort_values('날짜')
         
-        # [V13.1 에러 해결] melt 사용 전 데이터 유무 더 확실히 체크
         if df_merged.empty:
             st.info("그래프를 구성할 통합 데이터가 없습니다.")
             return
 
+        # 💡 [V13.2 업데이트] 리포트 탭의 교차 검증 그래프에도 실제 입력된 첫날 기준 강제 잠금 적용
+        valid_report = df_merged[(df_merged['컨디션스코어(1-10)'] > 0) | (df_merged['훈련강도(1-10)'] > 0)]
+        if not valid_report.empty:
+            first_report_date = valid_report['날짜'].min()
+            report_timestamp = int(first_report_date.timestamp() * 1000)
+            report_scale = alt.Scale(domain=[report_timestamp, None])
+        else:
+            report_scale = alt.Scale(domain=['data', None])
+
         df_melt = df_merged.melt('날짜', var_name='종류', value_name='점수')
         
-        # [V13.1 핵심 수정] 리포트 탭 차트에도 X축 시작점 고정 domain=['data', None] 적용
         line_chart = alt.Chart(df_melt).mark_line(point=True).encode(
             x=alt.X('날짜:T', 
                     title='날짜',
-                    scale=alt.Scale(domain=['data', None]) # 데이터 이전 과거로 줌아웃 불가
+                    scale=report_scale # 💡 유효 데이터 첫날 이전으로 패닝/줌아웃 절대 불가
                    ),
             y=alt.Y('점수:Q', title="점수 (1-10)", scale=alt.Scale(domain=[0, 10])),
             color=alt.Color('종류:N', scale=alt.Scale(domain=['컨디션스코어(1-10)', '훈련강도(1-10)'], range=['#1f77b4', '#ff7f0e'])),
@@ -328,7 +337,6 @@ def render_report_tab():
                 
                 aw, a_s = db.get_cached_data("workout"), db.get_cached_data("sleep")
                 
-                # 안전장치 및 데이터 포맷팅
                 w_ctx = " | ".join([f"{r[0]}({r[6]}) 코멘트:{r[7]}" for r in (aw[-target_days:] if len(aw)>target_days else aw[1:]) if len(r)>7])
                 s_ctx = " | ".join([f"{r[0]}(수면:{r[2]}, 컨디션:{r[4]})" for r in (a_s[-target_days:] if len(a_s)>target_days else a_s[1:]) if len(r)>4])
                 
