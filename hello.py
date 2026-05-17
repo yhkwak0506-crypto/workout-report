@@ -103,19 +103,14 @@ with tab_workout:
                 core.save_workout({"날짜": today, "공복 체중": f"{m_weight_display}kg", "훈련 볼륨": "훈련소일과", "상세 훈련 내용 (SOP 및 실전 역학)": f"[훈련소] {bc_rt}", "생리학적 분석 및 영양/비고": "-"})
                 st.success("저장 완료!"); st.rerun()
         else:
-            # 💡 [V12.1 추가] 축구 및 풋살 분리
-            st.info("야간/점호 전 틈새 기량유지 루틴입니다.")
-            col_b1, col_b2 = st.columns(2)
-            with col_b1:
-                v1 = st.checkbox("관물대 턱걸이")
-                v2 = st.checkbox("침상 푸쉬업")
-                v3 = st.checkbox("맨몸 스쿼트")
-                v4 = st.checkbox("코어/플랭크")
-            with col_b2:
-                v5 = st.checkbox("연병장 축구 ⚽")
-                v6 = st.checkbox("연병장 풋살 👟")
-                
-            if st.button("💾 야간 훈련 저장"):
+            c_pull, c_push, c_sq, c_core, c_soc, c_fut = st.columns(6)
+            with c_pull: v1 = st.checkbox("턱걸이")
+            with c_push: v2 = st.checkbox("푸쉬업")
+            with c_sq: v3 = st.checkbox("스쿼트")
+            with c_core: v4 = st.checkbox("코어")
+            with c_soc: v5 = st.checkbox("축구")
+            with c_fut: v6 = st.checkbox("풋살")
+            if st.button("💾 야간 저장"):
                 lst = [n for b, n in zip([v1,v2,v3,v4,v5,v6], ["턱걸이","푸쉬업","스쿼트","코어","축구","풋살"]) if b]
                 rt_str = ",".join(lst) if lst else "미실시"
                 core.save_workout({"날짜": today, "공복 체중": f"{m_weight_display}kg", "훈련 볼륨": "야간", "상세 훈련 내용 (SOP 및 실전 역학)": f"[기량유지] {rt_str}", "생리학적 분석 및 영양/비고": "-"})
@@ -124,7 +119,6 @@ with tab_workout:
         time_of_day = st.radio("⏰ 시간대", ("☀️ 오전", "🌤️ 오후", "🌙 저녁/야간"), horizontal=True)
         workout_type = st.selectbox("👇 세션 종류", ("개인 축구 훈련", "유산소/조깅", "실전 경기", "웨이트 트레이닝", "휴식"))
         
-        # 개인 축구 훈련 로직
         if workout_type == "개인 축구 훈련":
             location = st.text_input("📍 장소", "전주 용와초등학교 잔디구장")
             c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
@@ -141,7 +135,6 @@ with tab_workout:
                 core.save_workout({"날짜": today, "공복 체중": f"{m_weight_display}kg", "훈련 볼륨": f"{dist}km", "상세 훈련 내용 (SOP 및 실전 역학)": f"[{time_of_day}] {location} | {' ➡️ '.join(st.session_state.football_drills)}", "생리학적 분석 및 영양/비고": "-"})
                 st.session_state.football_drills = []; st.success("저장 완료!"); st.rerun()
                 
-        # 다른 운동 생략 최소화 (웨이트, 실전 경기 등)
         elif workout_type == "실전 경기":
             match_type = st.selectbox("📍 경기", ["11대11 정규", "풋살", "미니게임"])
             dist = st.number_input("거리(km)", 0.0, step=0.1)
@@ -210,12 +203,32 @@ with tab_diet:
             st.cache_data.clear(); st.rerun()
 
 # ==========================================
-# 📈 TAB 4: 데이터/리포팅 센터 (💡 컨디션 vs 운동강도 직관적 그래프)
+# 📈 TAB 4: 데이터/리포팅 센터 
 # ==========================================
 with tab_report:
     st.header("📈 AI 퍼포먼스 분석 센터")
     
-    # 💡 [V12.1 추가] 컨디션(1-10) vs 운동강도(1-10) 그래프 구현
+    # 💡 [V12.2 에러 해결] hello.py 내부에 독립적인 강도 연산 함수 배치
+    def estimate_intensity_local(vol_str, detail_str):
+        try:
+            vol_str = str(vol_str)
+            detail_str = str(detail_str)
+            score = 2
+            if "축구" in detail_str or "경기템포" in detail_str: score += 4
+            if "풋살" in detail_str or "미니게임" in detail_str: score += 3
+            if "러닝" in detail_str or "인터벌" in detail_str: score += 4
+            if "행군" in detail_str or "각개전투" in detail_str: score += 6
+            if "웨이트" in detail_str or "턱걸이" in detail_str: score += 3
+            if "회복" in detail_str or "휴식" in detail_str: score -= 1
+            
+            km = core.extract_number(vol_str)
+            if km >= 10: score += 3
+            elif km >= 5: score += 2
+            elif km > 0: score += 1
+            return max(1, min(score, 10))
+        except: 
+            return 1
+
     st.subheader("📊 최근 7일 기상 컨디션 vs 훈련 강도 역학")
     all_w = core.get_cached_data("workout")
     all_s = core.get_cached_data("sleep")
@@ -230,8 +243,14 @@ with tab_report:
             df_w = pd.DataFrame(all_w[1:], columns=all_w[0])
             df_w['날짜'] = pd.to_datetime(df_w['날짜'], errors='coerce')
             df_w = df_w.dropna(subset=['날짜'])
-            # core 로직에 있는 estimate_intensity 함수로 1~10 스케일 변환
-            df_w['훈련강도(1-10)'] = df_w.apply(lambda row: core.estimate_intensity(row.iloc[2] if len(row)>2 else "", row.iloc[6] if len(row)>6 else ""), axis=1)
+            
+            # 💡 안전하게 get() 메서드를 사용하여 오류 원천 차단
+            df_w['훈련강도(1-10)'] = df_w.apply(
+                lambda row: estimate_intensity_local(
+                    row.get('훈련 볼륨', ''), 
+                    row.get('상세 훈련 내용 (SOP 및 실전 역학)', '')
+                ), axis=1
+            )
             df_w_grouped = df_w.groupby('날짜')['훈련강도(1-10)'].max().reset_index()
             
             df_merged = pd.merge(df_s[['날짜', '컨디션스코어(1-10)']], df_w_grouped[['날짜', '훈련강도(1-10)']], on='날짜', how='outer').fillna(0)
@@ -254,8 +273,7 @@ with tab_report:
                 aw, a_s, ad = core.get_cached_data("workout"), core.get_cached_data("sleep"), core.get_cached_data("diet")
                 w_ctx = " | ".join([f"{r[0]}({r[6]})" for r in (aw[-target_days:] if len(aw)>target_days else aw[1:]) if len(r)>6])
                 s_ctx = " | ".join([f"{r[0]}(수면:{r[2]}, 컨디션:{r[4]})" for r in (a_s[-target_days:] if len(a_s)>target_days else a_s[1:]) if len(r)>4])
-                prompt = f"곽연혁 선수의 데이터야. 운동:{w_ctx} 수면:{s_ctx}. 체력 트렌드와 다음 세션 솔루션을 분석해줘."
+                prompt = f"곽연혁 선수의 데이터야. 운동:{w_ctx} 수면:{s_ctx}. 체력 트렌드와 다음 세션 솔루션을 전문적으로 분석해줘."
                 
-                # 5번 시도해도 실패하면 친절한 문구 리턴됨
                 st.markdown(core.ask_gemini(prompt))
             except Exception as e: st.error(f"에러: {e}")
