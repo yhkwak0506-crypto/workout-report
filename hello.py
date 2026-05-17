@@ -78,10 +78,8 @@ if 'weight_sets' not in st.session_state: st.session_state.weight_sets = []
 
 today = datetime.now().strftime("%Y-%m-%d")
 
-# 💡 [업데이트] 메인 타이틀 변경
 st.title("⚡ Data of the Light")
 
-# 💡 [업데이트] 탭 이름 전면 수정
 tab_body, tab_workout, tab_diet, tab_report = st.tabs([
     "📊 신체 데이터", "🏋️ 운동 데이터", "🥗 식단 데이터", "📈 데이터/리포팅 센터"
 ])
@@ -137,7 +135,10 @@ with tab_body:
     st.subheader("📈 엘리트 바디 컴포지션 트렌드 (AI 추정치)")
     if len(all_m) > 2:
         df_body = pd.DataFrame(all_m[1:], columns=all_m[0])
-        df_body['날짜'] = pd.to_datetime(df_body['날짜'])
+        # 💡 [버그 픽스] 날짜 형식이 아닌 글자(예: ~)가 섞여 있으면 무시(NaT 처리)하고 삭제!
+        df_body['날짜'] = pd.to_datetime(df_body['날짜'], errors='coerce')
+        df_body = df_body.dropna(subset=['날짜'])
+        
         df_body['체중'] = df_body['공복 체중'].apply(extract_number)
         
         df_body['추정 골격근량(kg)'] = round(df_body['체중'] * 0.49, 1)
@@ -275,8 +276,11 @@ with tab_report:
         df_w = pd.DataFrame(all_w[1:], columns=all_w[0])
         df_s = pd.DataFrame(all_s[1:], columns=all_s[0])
         
-        df_w['날짜'] = pd.to_datetime(df_w['날짜'])
-        df_s['날짜'] = pd.to_datetime(df_s['날짜'])
+        # 💡 [버그 픽스] 날짜 형식이 아니면 무시(NaT)하고 드랍
+        df_w['날짜'] = pd.to_datetime(df_w['날짜'], errors='coerce')
+        df_s['날짜'] = pd.to_datetime(df_s['날짜'], errors='coerce')
+        df_w = df_w.dropna(subset=['날짜'])
+        df_s = df_s.dropna(subset=['날짜'])
         
         df_w['피로도(RPE)'] = df_w['생리학적 분석 및 영양/비고'].apply(extract_number)
         df_s['수면시간(h)'] = df_s['수면 시간'].apply(extract_number)
