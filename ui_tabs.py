@@ -6,29 +6,34 @@ import utils
 import db_service as db
 import ai_service as ai
 
-# 💡 [V13.4 핵심 업데이트] nice=False를 추가하여 날짜 축이 마음대로 늘어나는 현상 원천 차단
+# 💡 [V13.5 핵심 업데이트] 타임스탬프 충돌 해결 및 15일 뷰 스크롤 기능 완벽 구현
 def render_line_chart(df: pd.DataFrame, x_col: str, y_col: str, color: str, title: str):
     st.markdown(f"##### {title}")
     
+    # 0인 가짜 데이터(빈칸) 완벽 필터링 (선이 0으로 뚝 떨어지는 현상 방지)
     valid_df = df[df[y_col] > 0].copy()
     if valid_df.empty:
         st.info("차트를 그릴 데이터가 없습니다.")
         return
 
     valid_df = valid_df.sort_values(x_col)
-    view_df = valid_df.tail(15) # 최근 15개 
+    
+    # 데이터의 가장 최근 날짜(max)와, 그로부터 15일 전 날짜(min_view) 계산
+    max_date = valid_df[x_col].max()
+    min_view_date = max_date - timedelta(days=15)
+    
+    # 💡 차트 엔진이 뻗지 않도록 날짜를 완벽한 텍스트(String) 형식으로 변환하여 주입
+    max_date_str = max_date.strftime('%Y-%m-%d')
+    min_view_str = min_view_date.strftime('%Y-%m-%d')
 
-    min_date = view_df[x_col].min()
-    max_date = view_df[x_col].max()
-
-    chart = alt.Chart(view_df).mark_line(point=True).encode(
+    chart = alt.Chart(valid_df).mark_line(point=True).encode(
         x=alt.X(f'{x_col}:T', 
                 title="날짜",
-                # 💡 핵심 수정: nice=False 로 설정하여 3월, 8월 등 빈 날짜 렌더링 방지
-                scale=alt.Scale(domain=[min_date, max_date], nice=False, clamp=True)
+                # 초기 화면을 최근 15일로 딱 고정 (마우스로 드래그해서 과거로 이동 가능)
+                scale=alt.Scale(domain=[min_view_str, max_date_str], nice=False)
                ),
         y=alt.Y(f'{y_col}:Q', title=y_col, scale=alt.Scale(domainMin=0)),
-        tooltip=[alt.Tooltip(x_col, title="날짜"), alt.Tooltip(y_col, title=y_col)]
+        tooltip=[alt.Tooltip(f'{x_col}:T', title="날짜", format="%Y-%m-%d"), alt.Tooltip(f'{y_col}:Q', title=y_col)]
     ).properties(height=300).configure_mark(color=color).interactive(bind_y=False)
     
     st.altair_chart(chart, use_container_width=True)
@@ -299,24 +304,29 @@ def render_report_tab():
         
         df_merged = pd.merge(df_s[['날짜', '컨디션스코어(1-10)']], df_w_max[['날짜', '훈련강도(1-10)']], on='날짜', how='outer').fillna(0).sort_values('날짜')
         
+        # 0점인 데이터(기록 없는 날) 필터링
         valid_report = df_merged[(df_merged['컨디션스코어(1-10)'] > 0) | (df_merged['훈련강도(1-10)'] > 0)].copy()
         
         if not valid_report.empty:
-            valid_report = valid_report.tail(15)
-            min_date = valid_report['날짜'].min()
-            max_date = valid_report['날짜'].max()
-            
             df_melt = valid_report.melt('날짜', var_name='종류', value_name='점수')
+            df_melt = df_melt[df_melt['점수'] > 0] # 선이 바닥(0)으로 치고 내려가는 현상 방지
             
-            # 💡 핵심 수정: nice=False 적용 및 무한 줌아웃 방지
+            # X축 시작점을 가장 최근 데이터로부터 15일 전으로 세팅
+            max_date = df_melt['날짜'].max()
+            min_view_date = max_date - timedelta(days=15)
+            
+            # 스트링 형식으로 주입하여 1970/2046 버그 원천 차단
+            max_date_str = max_date.strftime('%Y-%m-%d')
+            min_view_str = min_view_date.strftime('%Y-%m-%d')
+            
             line_chart = alt.Chart(df_melt).mark_line(point=True).encode(
                 x=alt.X('날짜:T', 
                         title='날짜',
-                        scale=alt.Scale(domain=[min_date, max_date], nice=False, clamp=True) 
+                        scale=alt.Scale(domain=[min_view_str, max_date_str], nice=False)
                        ),
                 y=alt.Y('점수:Q', title="점수 (1-10)", scale=alt.Scale(domain=[0, 10])),
                 color=alt.Color('종류:N', scale=alt.Scale(domain=['컨디션스코어(1-10)', '훈련강도(1-10)'], range=['#1f77b4', '#ff7f0e'])),
-                tooltip=[alt.Tooltip('날짜:T', title="날짜"), alt.Tooltip('종류:N'), alt.Tooltip('점수:Q')]
+                tooltip=[alt.Tooltip('날짜:T', title="날짜", format="%Y-%m-%d"), alt.Tooltip('종류:N'), alt.Tooltip('점수:Q')]
             ).properties(height=350).interactive(bind_y=False)
             
             st.altair_chart(line_chart, use_container_width=True)
