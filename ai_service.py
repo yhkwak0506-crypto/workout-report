@@ -12,7 +12,6 @@ def get_api_key() -> str:
 GEMINI_API_KEY = get_api_key()
 HAS_AI = bool(GEMINI_API_KEY)
 
-# 💡 [V13.10 업데이트] 중앙 미드필더 특화 '경기템포 훈련' 도감 복구 및 고도화
 TRAINING_DICT = """
 [곽연혁 선수 전용 훈련 역학 및 SOP (용와초 잔디구장 기준)]
 1. 웜업 조깅: 본 훈련 전 체온 상승 및 심박수 예열을 위한 가벼운 러닝.
@@ -43,26 +42,40 @@ def get_best_gemini_model() -> str:
         pass
     return "models/gemini-1.5-flash" 
 
-def ask_gemini(prompt: str, retries: int = 4) -> str:
-    if not HAS_AI: return "API 키가 없습니다."
+# 💡 [핵심 수정] 무조건 503 에러로 뭉뚱그리지 않고, 진짜 원인(400, 403 등)을 텍스트로 바로 출력하게 변경
+def ask_gemini(prompt: str, retries: int = 3) -> str:
+    if not HAS_AI: return "🚨 API 키가 없습니다. 깃허브나 스트림릿 Secrets 설정을 확인해주세요."
+    
     target_model = get_best_gemini_model()
+    if not target_model: return "🚨 사용 가능한 AI 모델을 찾을 수 없습니다. API 키가 잘못되었을 수 있습니다."
+
     url = f"https://generativelanguage.googleapis.com/v1beta/{target_model}:generateContent?key={GEMINI_API_KEY}"
     headers = {'Content-Type': 'application/json'}
     data = {"contents": [{"parts": [{"text": prompt}]}]}
     
+    last_error = ""
     for attempt in range(retries):
         try:
             response = requests.post(url, headers=headers, json=data, timeout=15)
             if response.status_code == 200:
                 return response.json()['candidates'][0]['content']['parts'][0]['text']
-            elif response.status_code in [429, 500, 503]:
-                time.sleep(3)
-                continue
-            else: return f"API 통신 에러 ({response.status_code})"
+            else:
+                # 에러 코드가 200(성공)이 아닐 경우, 구글이 뱉어낸 진짜 에러 이유를 저장
+                last_error = f"HTTP {response.status_code} 에러: {response.text}"
+                
+                # 429(너무 많이 물어봄)나 500대 에러는 잠시 후 재시도
+                if response.status_code in [429, 500, 502, 503]:
+                    time.sleep(2)
+                    continue
+                else:
+                    # 400(프롬프트 오류), 403(API 키 만료 등)은 재시도해도 안 되니 바로 화면에 표출
+                    return f"🚨 구글 AI 통신 에러 발생:\n{last_error}"
         except Exception as e:
-            time.sleep(3)
+            last_error = str(e)
+            time.sleep(2)
             continue
-    return "🚨 구글 AI 서버 혼잡 (503). 잠시 후 다시 시도해 주세요."
+            
+    return f"🚨 구글 AI 연결 최종 실패. 상세 원인:\n{last_error}"
 
 def get_body_feedback(weight: float, muscle: float, fat_pct: float, fat_mass: float) -> str:
     prompt = f"""
