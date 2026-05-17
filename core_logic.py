@@ -1,1 +1,124 @@
+import streamlit as st
+import pandas as pd
+from datetime import datetime, date, timedelta
+import gspread
+from google.oauth2.service_account import Credentials
+import requests
+import re
+import time
 
+# ==========================================
+# 1. API 및 기본 설정
+# ==========================================
+def get_api_key():
+    if "GEMINI_API_KEY" in st.secrets: return st.secrets["GEMINI_API_KEY"]
+    elif "gcp" in st.secrets and "GEMINI_API_KEY" in st.secrets["gcp"]: return st.secrets["gcp"]["GEMINI_API_KEY"]
+    return ""
+
+GEMINI_API_KEY = get_api_key()
+HAS_AI = bool(GEMINI_API_KEY)
+MY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1N4KGhJf1ta1MOcATsOXcJayTe9ULsNGhL_9u8Rdbo_Q/edit"
+
+# ==========================================
+# 2. 구글 시트 연결 (DB)
+# ==========================================
+@st.cache_resource
+def init_connection():
+    scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+    creds = Credentials.from_service_account_info(dict(st.secrets["gcp"]), scopes=scopes)
+    return gspread.authorize(creds)
+
+try:
+    gc = init_connection()
+    doc = gc.open_by_url(MY_SHEET_URL)
+    try: sheet_workout = doc.worksheet("운동로그")
+    except: sheet_workout = doc.get_worksheet(0)
+    try: sheet_diet = doc.worksheet("식단로그")
+    except: sheet_diet = doc.add_worksheet(title="식단로그", rows="1000", cols="7")
+    try: sheet_sleep = doc.worksheet("수면/컨디션로그")
+    except: sheet_sleep = doc.add_worksheet(title="수면/컨디션로그", rows="1000", cols="10")
+except Exception as e:
+    st.error(f"🚨 구글 시트 연동 실패: {e}")
+
+@st.cache_data(ttl=5)
+def get_cached_data(tab_name):
+    try:
+        if tab_name == "sleep": return sheet_sleep.get_all_values()
+        elif tab_name == "workout": return sheet_workout.get_all_values()
+        elif tab_name == "diet": return sheet_diet.get_all_values()
+    except Exception as e: 
+        return []
+    return []
+
+# ==========================================
+# 3. 제미나이 AI 로직 (속도 최적화)
+# ==========================================
+@st.cache_resource(ttl=3600) # 💡 [속도 개선] 모델 이름은 1시간에 한 번만 물어봄
+def get_best_gemini_model():
+    if not HAS_AI: return None
+    list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
+    try:
+        list_resp = requests.get(list_url)
+        if list_resp.status_code == 200:
+            for m in list_resp.json().get('models', []):
+                name = m.get('name', '')
+                if 'generateContent' in m.get('supportedGenerationMethods', []) and 'gemini' in name.lower() and 'vision' not in name.lower():
+                    return name
+    except Exception as e:
+        pass
+    return "models/gemini-1.5-flash" 
+
+def ask_gemini(prompt, retries=3):
+    if not HAS_AI: raise Exception("API 키가 없습니다.")
+    target_model = get_best_gemini_model()
+    url = f"https://generativelanguage.googleapis.com/v1beta/{target_model}:generateContent?key={GEMINI_API_KEY}"
+    headers = {'Content-Type': 'application/json'}
+    data = {"contents": [{"parts": [{"text": prompt}]}]}
+    
+    for attempt in range(retries):
+        try:
+            response = requests.post(url, headers=headers, json=data)
+            if response.status_code == 200:
+                return response.json()['candidates'][0]['content']['parts'][0]['text']
+            elif response.status_code >= 500:
+                time.sleep(2)
+                continue
+            else:
+                raise Exception(f"통신 에러 ({response.status_code})")
+        except requests.exceptions.RequestException as e:
+            time.sleep(2)
+            continue
+    raise Exception("구글 AI 서버가 현재 일시적으로 혼잡합니다 (503). 몇 초 뒤에 다시 시도해 주세요.")
+
+# ==========================================
+# 4. 유틸리티 함수
+# ==========================================
+def extract_number(val):
+    match = re.search(r'(\d+(?:\.\d+)?)', str(val))
+    return float(match.group(1)) if match else 0.0
+
+def parse_meal_cell(cell_value):
+    if not cell_value: return "", "⏳ 미등록"
+    if " | AI 분석:" in cell_value:
+        parts = cell_value.split(" | AI 분석:")
+        return parts[0].strip(), parts[1].strip()
+    return cell_value, "⏳ 분석 대기 중"
+
+def save_single_meal(today, col_idx, text_val):
+    all_d_current = sheet_diet.get_all_values()
+    row_idx = None
+    for idx, r in enumerate(all_d_current):
+        if r[0] == today:
+            row_idx = idx + 1
+            break
+    if row_idx: sheet_diet.update_cell(row_idx, col_idx, text_val)
+    else:
+        new_row = [today, "0kcal", "", "", "", "", ""]
+        new_row[col_idx - 1] = text_val
+        sheet_diet.append_row(new_row)
+    st.cache_data.clear()
+
+def save_workout(data_dict):
+    cols = ["날짜", "공복 체중", "훈련 볼륨", "평균 심박", "최대 심박", "심박 회복량(HRR)", "상세 훈련 내용 (SOP 및 실전 역학)", "생리학적 분석 및 영양/비고"]
+    sheet_workout.append_row([str(data_dict.get(c, "")) for c in cols])
+    st.cache_data.clear()
