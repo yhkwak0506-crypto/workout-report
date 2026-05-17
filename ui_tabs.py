@@ -6,11 +6,9 @@ import utils
 import db_service as db
 import ai_service as ai
 
-# 💡 [V13.5 핵심 업데이트] 타임스탬프 충돌 해결 및 15일 뷰 스크롤 기능 완벽 구현
 def render_line_chart(df: pd.DataFrame, x_col: str, y_col: str, color: str, title: str):
     st.markdown(f"##### {title}")
     
-    # 0인 가짜 데이터(빈칸) 완벽 필터링 (선이 0으로 뚝 떨어지는 현상 방지)
     valid_df = df[df[y_col] > 0].copy()
     if valid_df.empty:
         st.info("차트를 그릴 데이터가 없습니다.")
@@ -18,18 +16,15 @@ def render_line_chart(df: pd.DataFrame, x_col: str, y_col: str, color: str, titl
 
     valid_df = valid_df.sort_values(x_col)
     
-    # 데이터의 가장 최근 날짜(max)와, 그로부터 15일 전 날짜(min_view) 계산
     max_date = valid_df[x_col].max()
     min_view_date = max_date - timedelta(days=15)
     
-    # 💡 차트 엔진이 뻗지 않도록 날짜를 완벽한 텍스트(String) 형식으로 변환하여 주입
     max_date_str = max_date.strftime('%Y-%m-%d')
     min_view_str = min_view_date.strftime('%Y-%m-%d')
 
     chart = alt.Chart(valid_df).mark_line(point=True).encode(
         x=alt.X(f'{x_col}:T', 
                 title="날짜",
-                # 초기 화면을 최근 15일로 딱 고정 (마우스로 드래그해서 과거로 이동 가능)
                 scale=alt.Scale(domain=[min_view_str, max_date_str], nice=False)
                ),
         y=alt.Y(f'{y_col}:Q', title=y_col, scale=alt.Scale(domainMin=0)),
@@ -133,10 +128,20 @@ def render_workout_tab(today: str, bootcamp_mode: bool):
         if workout_type == "개인 축구 훈련":
             location = st.text_input("📍 장소", "전주 용와초등학교 잔디구장", key="football_loc")
             c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
-            with c1: drill = st.selectbox("📋 종목", ["40/20 인터벌", "매스템포런", "경기템포 훈련", "기본기", "슈팅"], key="football_drill")
+            
+            # 💡 [V13.6 업데이트] 요청하신 실전 훈련 5종목 리스트로 완벽 교체
+            drill_options = [
+                "40/20 풀코트 인터벌", 
+                "40/20 하프라인 인터벌", 
+                "25/20 페널티박스 인터벌", 
+                "15/5 드리블 슈팅 믹스 인터벌", 
+                "15/15 매스템포런"
+            ]
+            with c1: drill = st.selectbox("📋 종목", drill_options, key="football_drill")
             with c2: reps = st.number_input("횟수", min_value=1, step=1, key="football_reps")
             with c3: sets = st.number_input("세트", min_value=1, step=1, key="football_sets")
-            with c4: rest = st.text_input("휴식", "2분", key="football_rest")
+            with c4: rest = st.text_input("세트간 휴식", "2분", key="football_rest")
+            
             if st.button("➕ 루틴 추가", key="add_football_drill"): st.session_state.football_drills.append(f"{drill}({reps}회/{sets}세트)")
             if st.session_state.football_drills:
                 st.info("👉 " + " ➡️ ".join(st.session_state.football_drills))
@@ -304,20 +309,17 @@ def render_report_tab():
         
         df_merged = pd.merge(df_s[['날짜', '컨디션스코어(1-10)']], df_w_max[['날짜', '훈련강도(1-10)']], on='날짜', how='outer').fillna(0).sort_values('날짜')
         
-        # 0점인 데이터(기록 없는 날) 필터링
         valid_report = df_merged[(df_merged['컨디션스코어(1-10)'] > 0) | (df_merged['훈련강도(1-10)'] > 0)].copy()
         
         if not valid_report.empty:
+            valid_report = valid_report.tail(15)
+            min_date = valid_report['날짜'].min()
+            max_date = valid_report['날짜'].max()
+            
             df_melt = valid_report.melt('날짜', var_name='종류', value_name='점수')
-            df_melt = df_melt[df_melt['점수'] > 0] # 선이 바닥(0)으로 치고 내려가는 현상 방지
             
-            # X축 시작점을 가장 최근 데이터로부터 15일 전으로 세팅
-            max_date = df_melt['날짜'].max()
-            min_view_date = max_date - timedelta(days=15)
-            
-            # 스트링 형식으로 주입하여 1970/2046 버그 원천 차단
             max_date_str = max_date.strftime('%Y-%m-%d')
-            min_view_str = min_view_date.strftime('%Y-%m-%d')
+            min_view_str = (max_date - timedelta(days=15)).strftime('%Y-%m-%d')
             
             line_chart = alt.Chart(df_melt).mark_line(point=True).encode(
                 x=alt.X('날짜:T', 
@@ -348,9 +350,11 @@ def render_report_tab():
                 w_ctx = " | ".join([f"{r[0]}({r[6]}) 코멘트:{r[7]}" for r in (aw[-target_days:] if len(aw)>target_days else aw[1:]) if len(r)>7])
                 s_ctx = " | ".join([f"{r[0]}(수면:{r[2]}, 컨디션:{r[4]})" for r in (a_s[-target_days:] if len(a_s)>target_days else a_s[1:]) if len(r)>4])
                 
+                # 💡 [V13.6 업데이트] 최종 분석 리포트 발행 시에도 ai_service의 훈련 도감을 읽게 만듦
                 prompt = f"""
                 수석 피지컬 코치야. 목표: 2027년 말 전역 직후 아일랜드, 덴마크, 스웨덴, 노르웨이 1~2부 리그 진출.
-                최근 데이터(운동:{w_ctx} / 수면:{s_ctx}) 분석해줘. 목표 리그 선수 수준에 맞춰 현실적이고 동기부여가 확실한 체력 트렌드 피드백과 다음 세션 솔루션을 제공해.
+                {ai.TRAINING_DICT}
+                최근 데이터(운동:{w_ctx} / 수면:{s_ctx})를 분석해줘. 위의 훈련 도감을 참고하여 선수가 받은 생리학적 부하를 정확히 파악하고, 현실적이면서도 날카로운 체력 트렌드 피드백과 다음 세션 솔루션을 제공해.
                 """
                 st.markdown(ai.ask_gemini(prompt))
             except Exception as e: st.error(f"리포트 발행 중 에러 발생: {e}")
