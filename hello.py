@@ -35,7 +35,6 @@ tab_body, tab_workout, tab_diet, tab_report = st.tabs([
     "📊 신체 데이터", "🏋️ 운동 데이터", "🥗 식단 데이터", "📈 데이터/리포팅 센터"
 ])
 
-# 💡 Altair 차트 보조 함수 (Y축 0 고정 및 스크롤)
 def render_line_chart(df, x_col, y_col, color, title):
     st.markdown(f"##### {title}")
     chart = alt.Chart(df).mark_line(point=True).encode(
@@ -46,7 +45,7 @@ def render_line_chart(df, x_col, y_col, color, title):
     st.altair_chart(chart, use_container_width=True)
 
 # ==========================================
-# 📊 TAB 1: 신체 데이터 (누락 그래프 복구)
+# 📊 TAB 1: 신체 데이터
 # ==========================================
 with tab_body:
     st.header("📊 수면 과학 및 신체 데이터 대시보드")
@@ -87,7 +86,7 @@ with tab_body:
         df_s['날짜'] = pd.to_datetime(df_s['날짜'], errors='coerce')
         df_s = df_s.dropna(subset=['날짜'])
         df_s['체중'] = df_s['공복 체중'].apply(core.extract_number)
-        df_s = df_s[df_s['체중'] > 0].tail(30) # 스케일링: 최근 30일치만 렌더링
+        df_s = df_s[df_s['체중'] > 0].tail(30)
         
         if not df_s.empty:
             df_s['추정 골격근량'] = round(df_s['체중'] * 0.49, 1)
@@ -106,7 +105,7 @@ with tab_body:
             with c4: render_line_chart(df_s, '날짜', '수면시간(h)', '#9467bd', '💤 수면 시간 (h)')
 
 # ==========================================
-# 🏋️ TAB 2: 운동 데이터 (누락된 페이스 렌더링 복구)
+# 🏋️ TAB 2: 운동 데이터
 # ==========================================
 with tab_workout:
     st.header("🧠 오늘의 트레이닝 세션 로깅")
@@ -196,9 +195,13 @@ with tab_workout:
     if len(all_w) > 1:
         df_w = pd.DataFrame(all_w[1:], columns=all_w[0]).tail(20)
         edited_w = st.data_editor(df_w, num_rows="dynamic", use_container_width=True)
+        if st.button("🔄 운동 데이터 덮어쓰기"):
+            core.sheet_workout.clear()
+            core.sheet_workout.append_rows([edited_w.columns.tolist()] + edited_w.fillna("").astype(str).values.tolist())
+            st.cache_data.clear(); st.rerun()
 
 # ==========================================
-# 🥗 TAB 3: 식단 데이터 (누락된 코칭 버튼 복구)
+# 🥗 TAB 3: 식단 데이터
 # ==========================================
 with tab_diet:
     st.header("🥗 영양 섭취 로깅")
@@ -226,23 +229,33 @@ with tab_diet:
                         core.save_single_meal(today, idx, f"{inputs[idx]} | AI 분석: {kcal}")
                         st.rerun()
 
-    # 💡 누락되었던 AI 식단 코치 복구
     st.write("---")
     if st.button("🧠 현재까지 영양 분석 및 다음 식사 추천받기"):
         if HAS_AI:
             with st.spinner("AI 영양사 분석 중..."):
                 aw = core.get_cached_data("workout")
                 today_w = " | ".join([r[6] for r in aw if r[0]==today and len(r)>6])
-                prompt = f"축구선수 오늘운동:[{today_w}], 아침:[{raws[3]}], 점심:[{raws[4]}], 저녁:[{raws[5]}]. 아직 안먹은 칸은 호들갑 떨지 말고, 훈련량 대비 남은 식사에서 보충할 탄단지 메뉴 추천해줘."
+                # 💡 [V12.4 업데이트] 영양 코칭 목표를 유럽 하부리그 선수 평균 소비량/회복량에 맞춤
+                prompt = f"목표: 2027년 전역 후 북유럽, 아일랜드 프로 리그 복귀. 오늘운동:[{today_w}], 아침:[{raws[3]}], 점심:[{raws[4]}], 저녁:[{raws[5]}]. 아직 안먹은 칸은 시간이 안 된 거니 경고 금지. EPL 기준이 아닌 유럽 2-3부 리그 선수의 기준에 맞춰 현실적으로 남은 식사에서 보충할 탄단지(g)와 메뉴를 추천해줘."
                 st.markdown(core.ask_gemini(prompt))
         else: st.error("API 키 필요")
 
+    st.write("---")
+    if len(all_d) > 1:
+        df_d = pd.DataFrame(all_d[1:], columns=all_d[0])
+        edited_d = st.data_editor(df_d, num_rows="dynamic", use_container_width=True)
+        if st.button("🔄 식단 데이터 덮어쓰기"):
+            core.sheet_diet.clear()
+            core.sheet_diet.append_rows([edited_d.columns.tolist()] + edited_d.fillna("").astype(str).values.tolist())
+            st.cache_data.clear(); st.rerun()
+
 # ==========================================
-# 📈 TAB 4: 리포팅 센터 (💡 Altair 무결점 바 차트 도입)
+# 📈 TAB 4: 데이터/리포팅 센터 
 # ==========================================
 with tab_report:
     st.header("📈 AI 퍼포먼스 분석 센터")
     
+    # 💡 [V12.4 업데이트] 스택 오류 해결 및 직관적인 점+선 그래프(Line Chart)로 변환
     st.subheader("📊 기상 컨디션 vs 훈련 강도 역학 (1-10 스케일)")
     all_w = core.get_cached_data("workout")
     all_s = core.get_cached_data("sleep")
@@ -251,38 +264,36 @@ with tab_report:
         df_s = pd.DataFrame(all_s[1:], columns=all_s[0])
         df_s['날짜'] = pd.to_datetime(df_s['날짜'], errors='coerce')
         df_s = df_s.dropna(subset=['날짜'])
-        df_s['컨디션스코어'] = df_s['신체 컨디션'].apply(core.extract_number)
+        df_s['컨디션스코어(1-10)'] = df_s['신체 컨디션'].apply(core.extract_number)
         
         df_w = pd.DataFrame(all_w[1:], columns=all_w[0])
         df_w['날짜'] = pd.to_datetime(df_w['날짜'], errors='coerce')
         df_w = df_w.dropna(subset=['날짜'])
         
-        # 💡 DB에 박제된 AI 훈련 강도 추출 (없으면 5점)
         def get_saved_intensity(row):
             try:
                 note = str(row.get('생리학적 분석 및 영양/비고', ''))
-                if 'AI추정강도:' in note:
-                    return int(note.split(':')[1])
+                if 'AI추정강도:' in note: return int(note.split(':')[1])
             except: pass
             return 5
             
-        df_w['훈련강도'] = df_w.apply(get_saved_intensity, axis=1)
-        df_w_max = df_w.groupby('날짜')['훈련강도'].max().reset_index()
+        df_w['훈련강도(1-10)'] = df_w.apply(get_saved_intensity, axis=1)
+        df_w_max = df_w.groupby('날짜')['훈련강도(1-10)'].max().reset_index()
         
-        df_merged = pd.merge(df_s[['날짜', '컨디션스코어']], df_w_max[['날짜', '훈련강도']], on='날짜', how='outer').fillna(0).tail(15)
+        df_merged = pd.merge(df_s[['날짜', '컨디션스코어(1-10)']], df_w_max[['날짜', '훈련강도(1-10)']], on='날짜', how='outer').fillna(0).tail(15)
         
-        # 💡 Altair를 이용한 나란히 배치되는(X offset) 바 차트 (Y축 0-10 고정)
+        # 선 그래프(point=True)를 사용하여 값을 위로 쌓지 않고 동일한 X축 상에서 직관적으로 겹쳐서 확인 가능
         df_melt = df_merged.melt('날짜', var_name='종류', value_name='점수')
-        bar_chart = alt.Chart(df_melt).mark_bar().encode(
+        line_chart = alt.Chart(df_melt).mark_line(point=True).encode(
             x=alt.X('날짜:T', title='날짜'),
-            xOffset='종류:N',
             y=alt.Y('점수:Q', scale=alt.Scale(domain=[0, 10])),
-            color=alt.Color('종류:N', scale=alt.Scale(domain=['컨디션스코어', '훈련강도'], range=['#1f77b4', '#ff7f0e']))
+            color=alt.Color('종류:N', scale=alt.Scale(domain=['컨디션스코어(1-10)', '훈련강도(1-10)'], range=['#1f77b4', '#ff7f0e'])),
+            tooltip=['날짜:T', '종류:N', '점수:Q']
         ).interactive(bind_y=False).properties(height=350)
         
-        st.altair_chart(bar_chart, use_container_width=True)
+        st.altair_chart(line_chart, use_container_width=True)
     else:
-        st.info("그래프를 그리려면 신체 및 운동 데이터 누적이 필요합니다.")
+        st.info("최소 2일 이상의 데이터 누적이 필요합니다.")
 
     st.write("---")
     report_type = st.radio("📋 분석 사이클", ["⚡ 실시간", "🔍 7일 주간", "📊 14일 하프", "🏆 30일 월간"], horizontal=True)
@@ -293,6 +304,12 @@ with tab_report:
                 aw, a_s = core.get_cached_data("workout"), core.get_cached_data("sleep")
                 w_ctx = " | ".join([f"{r[0]}({r[6]})" for r in (aw[-target_days:] if len(aw)>target_days else aw[1:]) if len(r)>6])
                 s_ctx = " | ".join([f"{r[0]}(수면:{r[2]}, 컨디션:{r[4]})" for r in (a_s[-target_days:] if len(a_s)>target_days else a_s[1:]) if len(r)>4])
-                prompt = f"곽연혁 선수의 데이터야. 운동:{w_ctx} 수면:{s_ctx}. 체력 트렌드와 다음 세션 솔루션을 전문적으로 분석해줘."
+                
+                # 💡 [V12.4 업데이트] 거시 분석 리포트 발행 시에도 목표(유럽 하부리그 복귀)를 명확히 주입
+                prompt = f"""
+                너는 곽연혁 선수의 수석 피지컬 코치야. 
+                목표: 2027년 말 전역 직후 아일랜드, 덴마크, 스웨덴, 노르웨이 1~2부 리그 진출.
+                최근 데이터(운동:{w_ctx} / 수면:{s_ctx})를 분석해서, 최상위 리그의 비현실적 기준이 아닌, 해당 목표 리그 선수 수준에 맞춰 현실적이면서도 동기부여가 확실한 체력 트렌드 피드백과 다음 세션 솔루션을 제공해줘.
+                """
                 st.markdown(core.ask_gemini(prompt))
             except Exception as e: st.error(f"에러: {e}")
