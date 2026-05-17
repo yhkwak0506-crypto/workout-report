@@ -129,7 +129,7 @@ def render_workout_tab(today: str, bootcamp_mode: bool):
             location = st.text_input("📍 장소", "전주 용와초등학교 잔디구장", key="football_loc")
             c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
             
-            # 💡 [V13.7 업데이트] "프리킥 (세트 사이)" 추가
+            # 💡 [V13.8] 프리킥 포함 완벽 업데이트!
             drill_options = [
                 "40/20 풀코트 인터벌", 
                 "40/20 하프라인 인터벌", 
