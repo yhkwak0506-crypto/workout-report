@@ -72,15 +72,13 @@ except Exception as e:
     st.error(f"🚨 구글 시트 연동 실패: {e}")
     st.stop()
 
-# 💡 [V10.1 업데이트] 구글 API 과부하(API Error) 완벽 차단을 위한 캐싱 시스템
 @st.cache_data(ttl=15)
 def get_cached_data(tab_name):
     try:
         if tab_name == "sleep": return sheet_sleep.get_all_values()
         elif tab_name == "workout": return sheet_workout.get_all_values()
         elif tab_name == "diet": return sheet_diet.get_all_values()
-    except:
-        return []
+    except: return []
     return []
 
 if 'football_drills' not in st.session_state: st.session_state.football_drills = []
@@ -132,34 +130,43 @@ with tab_body:
         with c_size3: waist_sz = st.number_input("허리 (cm)", value=0.0, step=0.1)
         with c_size4: thigh_sz = st.number_input("허벅지 (cm)", value=0.0, step=0.1)
 
-    if st.button("🚀 신체/수면 데이터 저장"):
+    if st.button("🚀 신체/수면 데이터 신규 저장"):
         sleep_row = [today, f"{m_weight}kg", f"{calc_sleep_hours}시간", f"{m_quality}점", f"{m_cond}점",
             f"{chest_sz}cm" if chest_sz > 0 else "-", f"{arm_sz}cm" if arm_sz > 0 else "-",
             f"{waist_sz}cm" if waist_sz > 0 else "-", f"{thigh_sz}cm" if thigh_sz > 0 else "-"]
         sheet_sleep.append_row(sleep_row)
-        st.cache_data.clear() # 저장 후 캐시 초기화 (중요)
+        st.cache_data.clear() 
         st.success("데이터가 성공적으로 저장되었습니다!")
         st.rerun()
         
     all_m = get_cached_data("sleep")
     
+    # 💡 [V10.2] 신체 데이터 라이브 수정 기능
     st.write("---")
-    st.subheader("📈 엘리트 바디 컴포지션 트렌드 (AI 추정치)")
-    if len(all_m) > 2:
+    st.subheader("🛠️ 신체 데이터베이스 (실시간 수정 가능)")
+    st.info("표 안의 글자를 더블클릭해서 자유롭게 수정한 뒤, 아래의 덮어쓰기 버튼을 누르면 구글 시트에 반영됩니다.")
+    if len(all_m) > 1:
         df_body = pd.DataFrame(all_m[1:], columns=all_m[0])
+        edited_body = st.data_editor(df_body, num_rows="dynamic", use_container_width=True, key="edit_body")
+        if st.button("🔄 수정한 신체 데이터를 구글 시트에 덮어쓰기"):
+            sheet_sleep.clear()
+            sheet_sleep.append_rows([edited_body.columns.tolist()] + edited_body.fillna("").astype(str).values.tolist())
+            st.cache_data.clear()
+            st.success("구글 시트 원본이 완벽하게 수정되었습니다!")
+            st.rerun()
+
+        # 그래프
         df_body['날짜'] = pd.to_datetime(df_body['날짜'], errors='coerce')
         df_body = df_body.dropna(subset=['날짜'])
-        
         df_body['체중'] = df_body['공복 체중'].apply(extract_number)
-        
         df_body['추정 골격근량(kg)'] = round(df_body['체중'] * 0.49, 1)
         df_body['추정 체지방률(%)'] = round(11.5 + (df_body['체중'] - 77.5) * 0.7, 1)
         df_body['추정 체지방량(kg)'] = round(df_body['체중'] * (df_body['추정 체지방률(%)'] / 100), 1)
         
+        st.write("---")
+        st.subheader("📈 엘리트 바디 컴포지션 트렌드 (AI 추정치)")
         chart_data = df_body.set_index('날짜')[['추정 골격근량(kg)', '추정 체지방량(kg)']]
         st.line_chart(chart_data, color=["#1f77b4", "#ff7f0e"])
-    else:
-        st.info("그래프를 생성하려면 2일 이상의 신체 데이터 누적이 필요합니다.")
 
 # ------------------------------------------
 # 🏋️ TAB 2: 운동 데이터
@@ -168,13 +175,12 @@ with tab_workout:
     st.header("🧠 오늘의 트레이닝 세션 로깅")
     time_of_day = st.radio("⏰ 시간대", ("☀️ 오전", "🌤️ 오후", "🌙 저녁/야간"), horizontal=True)
     workout_type = st.selectbox("👇 세션 종류", ("개인 축구 훈련", "유산소/조깅", "실전 경기", "웨이트 트레이닝", "휴식(Recovery)"))
-    # 💡 [V10.1 업데이트] 피로도 스케일 삭제 완료
     st.write("---")
 
     def save_workout(data_dict):
         cols = ["날짜", "공복 체중", "훈련 볼륨", "평균 심박", "최대 심박", "심박 회복량(HRR)", "상세 훈련 내용 (SOP 및 실전 역학)", "생리학적 분석 및 영양/비고"]
         sheet_workout.append_row([str(data_dict.get(c, "")) for c in cols])
-        st.cache_data.clear() # 저장 후 캐시 초기화
+        st.cache_data.clear()
 
     if workout_type == "개인 축구 훈련":
         location = st.text_input("📍 장소 입력", "전주 용와초등학교 잔디구장")
@@ -192,8 +198,8 @@ with tab_workout:
         with col2: h_avg = st.number_input("❤️ 평균 심박", min_value=0, step=1)
         with col3: h_max = st.number_input("🔥 최대 심박", min_value=0, step=1)
         with col4: hrr = st.text_input("📉 HRR")
-        if st.button("💾 저장"):
-            save_workout({"날짜": today, "공복 체중": "-", "훈련 볼륨": f"{dist}km", "평균 심박": h_avg, "최대 심박": h_max, "심박 회복량(HRR)": hrr, "상세 훈련 내용 (SOP 및 실전 역학)": f"[{time_of_day}] 장소:{location} | 루틴:{' ➡️ '.join(st.session_state.football_drills)}", "생리학적 분석 및 영양/비고": "-"})
+        if st.button("💾 신규 운동 저장"):
+            save_workout({"날짜": today, "공복 체중": "세션 기록", "훈련 볼륨": f"{dist}km", "평균 심박": h_avg, "최대 심박": h_max, "심박 회복량(HRR)": hrr, "상세 훈련 내용 (SOP 및 실전 역학)": f"[{time_of_day}] 장소:{location} | 루틴:{' ➡️ '.join(st.session_state.football_drills)}", "생리학적 분석 및 영양/비고": "-"})
             st.session_state.football_drills = []; st.success("저장 완료!"); st.rerun()
 
     elif workout_type == "유산소/조깅":
@@ -216,7 +222,7 @@ with tab_workout:
         with col2: h_avg = st.number_input("❤️ 평균 심박", 0)
         with col3: h_max = st.number_input("🔥 최대 심박", 0)
         with col4: hrr = st.text_input("📉 HRR")
-        if st.button("💾 저장"):
+        if st.button("💾 신규 운동 저장"):
             save_workout({"날짜": today, "공복 체중": "-", "훈련 볼륨": f"{dist}km", "평균 심박": h_avg, "최대 심박": h_max, "심박 회복량(HRR)": hrr, "상세 훈련 내용 (SOP 및 실전 역학)": f"[{time_of_day}] 시퀀스:{' ➡️ '.join(st.session_state.cardio_drills)}", "생리학적 분석 및 영양/비고": "-"})
             st.session_state.cardio_drills = []; st.success("저장 완료!"); st.rerun()
 
@@ -224,7 +230,7 @@ with tab_workout:
         match_type = st.selectbox("📍 경기", ["11대11 정규", "풋살", "미니게임"])
         dist = st.number_input("거리(km)", 0.0, step=0.1)
         memo = st.text_area("📝 리뷰")
-        if st.button("💾 저장"): save_workout({"날짜": today, "공복 체중": "-", "훈련 볼륨": f"{dist}km", "평균 심박": 0, "최대 심박": 0, "심박 회복량(HRR)": "-", "상세 훈련 내용 (SOP 및 실전 역학)": f"[{time_of_day}] {match_type} | 리뷰: {memo}", "생리학적 분석 및 영양/비고": "-"}); st.success("저장 완료!"); st.rerun()
+        if st.button("💾 신규 운동 저장"): save_workout({"날짜": today, "공복 체중": "-", "훈련 볼륨": f"{dist}km", "평균 심박": 0, "최대 심박": 0, "심박 회복량(HRR)": "-", "상세 훈련 내용 (SOP 및 실전 역학)": f"[{time_of_day}] {match_type} | 리뷰: {memo}", "생리학적 분석 및 영양/비고": "-"}); st.success("저장 완료!"); st.rerun()
 
     elif workout_type == "웨이트 트레이닝":
         ex_name = st.text_input("운동 이름")
@@ -234,7 +240,7 @@ with tab_workout:
         if st.button("➕ 추가"): st.session_state.weight_sets.append({"운동명": ex_name, "무게": weight, "횟수": reps, "세트수": sets})
         if st.session_state.weight_sets:
             st.dataframe(pd.DataFrame(st.session_state.weight_sets))
-            if st.button("💾 저장"):
+            if st.button("💾 신규 운동 저장"):
                 w_list = [f"{s['운동명']}({s['무게']}kg x{s['횟수']}회 {s['세트수']}세트)" for s in st.session_state.weight_sets]
                 save_workout({"날짜": today, "공복 체중": "-", "훈련 볼륨": "-", "평균 심박": 0, "최대 심박": 0, "심박 회복량(HRR)": "-", "상세 훈련 내용 (SOP 및 실전 역학)": f"[{time_of_day}] " + ", ".join(w_list), "생리학적 분석 및 영양/비고": "-"})
                 st.session_state.weight_sets = []; st.success("저장 완료!"); st.rerun()
@@ -243,43 +249,101 @@ with tab_workout:
         rec_act = st.multiselect("📋 활동", ["완전 휴식", "회복 걷기", "리커버리 조깅", "스트레칭", "폼롤러", "사우나"])
         rec_dist = st.number_input("거리(km)", 0.0, step=0.1)
         memo = st.text_area("📝 메모")
-        if st.button("💾 저장"): save_workout({"날짜": today, "공복 체중": "-", "훈련 볼륨": f"회복{rec_dist}km", "평균 심박": 0, "최대 심박": 0, "심박 회복량(HRR)": "-", "상세 훈련 내용 (SOP 및 실전 역학)": f"[휴식] 활동:{','.join(rec_act)} | 메모:{memo}", "생리학적 분석 및 영양/비고": "-"}); st.success("저장 완료!"); st.rerun()
+        if st.button("💾 신규 운동 저장"): save_workout({"날짜": today, "공복 체중": "-", "훈련 볼륨": f"회복{rec_dist}km", "평균 심박": 0, "최대 심박": 0, "심박 회복량(HRR)": "-", "상세 훈련 내용 (SOP 및 실전 역학)": f"[휴식] 활동:{','.join(rec_act)} | 메모:{memo}", "생리학적 분석 및 영양/비고": "-"}); st.success("저장 완료!"); st.rerun()
 
     all_w = get_cached_data("workout")
-    if len(all_w) > 1: st.dataframe(pd.DataFrame(all_w[1:], columns=all_w[0]).fillna(""), use_container_width=True)
+    
+    # 💡 [V10.2] 운동 데이터 라이브 수정 기능
+    st.write("---")
+    st.subheader("🛠️ 운동 데이터베이스 (실시간 수정 가능)")
+    st.info("운동 볼륨을 깜빡하셨나요? 표 안을 더블클릭해서 바로 수정하고 아래 버튼을 누르세요.")
+    if len(all_w) > 1:
+        df_workout = pd.DataFrame(all_w[1:], columns=all_w[0])
+        edited_workout = st.data_editor(df_workout, num_rows="dynamic", use_container_width=True, key="edit_workout")
+        if st.button("🔄 수정한 운동 데이터를 구글 시트에 덮어쓰기"):
+            sheet_workout.clear()
+            sheet_workout.append_rows([edited_workout.columns.tolist()] + edited_workout.fillna("").astype(str).values.tolist())
+            st.cache_data.clear()
+            st.success("운동 로그 원본이 완벽하게 수정되었습니다!")
+            st.rerun()
 
 # ------------------------------------------
-# 🥗 TAB 3: 식단 데이터
+# 🥗 TAB 3: 식단 데이터 (실시간 반응형 AI 코치)
 # ------------------------------------------
 with tab_diet:
-    st.header("🥗 영양 섭취 및 매크로 AI 매니지먼트")
-    st.info("섭취하신 메뉴와 양을 적어주시면 AI가 총 칼로리를 자동 계산하여 저장합니다.")
+    st.header("🥗 영양 섭취 및 실시간 매크로 코칭")
+    st.info("💡 식사를 순서대로 적어보세요. 버튼을 누르면 AI가 오늘의 운동량과 지금까지 먹은 것을 계산해 '다음 식사'를 추천해 줍니다!")
     
     col_d1, col_d2 = st.columns(2)
     with col_d1:
-        breakfast = st.text_area("🌅 아침 식단", height=80)
-        lunch = st.text_area("☀️ 점심 식단", height=80)
+        breakfast = st.text_area("🌅 아침 식단 (먹은 후 적어주세요)", height=80)
+        lunch = st.text_area("☀️ 점심 식단 (먹은 후 적어주세요)", height=80)
         night = st.text_area("🌌 야식", height=80)
     with col_d2:
-        dinner = st.text_area("🌙 저녁 식단", height=80)
+        dinner = st.text_area("🌙 저녁 식단 (먹은 후 적어주세요)", height=80)
         snacks = st.text_area("🥤 간식/보충제", height=80)
         
-    if st.button("🤖 AI 칼로리 분석 및 구글 시트 저장"):
+    # 오늘의 운동량 불러오기 (식단 추천을 위함)
+    all_w_for_diet = get_cached_data("workout")
+    today_w_str = "아직 기록된 오늘의 운동이 없습니다."
+    if len(all_w_for_diet) > 1:
+        today_w = [r for r in all_w_for_diet[1:] if r[0] == today]
+        if today_w:
+            today_w_str = " | ".join([f"볼륨:{r[2]}, 내용:{r[6]}" for r in today_w])
+
+    # 💡 [V10.2 업데이트] 실시간 AI 영양 코치 버튼
+    if st.button("🧠 현재까지의 식단 분석 및 [다음 식사] 추천받기"):
         if HAS_AI:
-            with st.spinner("제미나이 AI가 식단을 스캔하여 칼로리를 정밀 연산 중입니다..."):
-                prompt = f"""아침:{breakfast}, 점심:{lunch}, 저녁:{dinner}, 간식:{snacks}, 야식:{night}. 
-                이 식단의 총 칼로리만 숫자로 예측해서 '0000kcal' 형식으로 적어줘. 설명 금지."""
-                try: ai_total_kcal = ask_gemini(prompt).strip()
-                except Exception as e: ai_total_kcal = f"계산오류"
-                sheet_diet.append_row([today, ai_total_kcal, breakfast, lunch, dinner, snacks, night])
-                st.cache_data.clear() # 캐시 초기화
-                st.success(f"🎉 AI 계산 완료! 오늘 예상 섭취량은 **{ai_total_kcal}** 입니다.")
-                st.rerun()
+            with st.spinner("오늘의 훈련량과 지금까지의 식단을 분석하여 다음 식사 매크로를 계산 중입니다..."):
+                prompt = f"""
+                너는 엘리트 축구 선수의 전담 스포츠 영양사야.
+                [오늘 수행한 훈련량]: {today_w_str}
+                [오늘 지금까지 섭취한 식단]
+                - 아침: {breakfast if breakfast else '안먹음'}
+                - 점심: {lunch if lunch else '안먹음'}
+                - 저녁: {dinner if dinner else '안먹음'}
+                - 간식: {snacks if snacks else '안먹음'}
+                
+                요청사항:
+                1. 지금까지 섭취한 식단의 대략적인 칼로리와 단백질/탄수화물 분석.
+                2. 오늘의 훈련량을 고려하여 '아직 안 먹은 다음 식사(빈칸인 식사)'에 채워야 할 필수 칼로리와 단백질/탄수화물(g) 목표량 계산.
+                3. 그 목표량에 딱 맞는 현실적이고 구체적인 식단(메뉴) 3가지 추천.
+                """
+                try: 
+                    ai_diet_coach_response = ask_gemini(prompt)
+                    st.success("✨ 영양 코치의 실시간 분석이 완료되었습니다!")
+                    st.markdown(ai_diet_coach_response)
+                except Exception as e: st.error(f"코치 호출 오류: {e}")
         else:
-            st.error("AI API 키가 없습니다.")
-            
+            st.error("AI API 키가 필요합니다.")
+
+    st.write("---")
+    st.warning("⚠️ 하루 식사가 모두 끝난 후, 맨 마지막에 한 번만 아래 저장 버튼을 눌러주세요!")
+    if st.button("💾 (하루 1회) 오늘 식단 구글 시트 최종 저장"):
+        if HAS_AI:
+            with st.spinner("전체 식단 칼로리를 최종 연산하여 저장합니다..."):
+                prompt_cal = f"아침:{breakfast}, 점심:{lunch}, 저녁:{dinner}, 간식:{snacks}, 야식:{night}. 총 칼로리만 숫자로 예측해서 '0000kcal' 형식으로 적어줘. 설명 금지."
+                try: ai_total_kcal = ask_gemini(prompt_cal).strip()
+                except: ai_total_kcal = f"계산오류"
+                sheet_diet.append_row([today, ai_total_kcal, breakfast, lunch, dinner, snacks, night])
+                st.cache_data.clear()
+                st.success(f"🎉 하루 식단 저장이 완료되었습니다! (추정 칼로리: {ai_total_kcal})")
+                st.rerun()
+
     all_d = get_cached_data("diet")
-    if len(all_d) > 1: st.dataframe(pd.DataFrame(all_d[1:], columns=all_d[0]).fillna(""), use_container_width=True)
+    
+    # 💡 [V10.2] 식단 데이터 라이브 수정 기능
+    st.write("---")
+    st.subheader("🛠️ 식단 데이터베이스 (실시간 수정 가능)")
+    if len(all_d) > 1:
+        df_diet = pd.DataFrame(all_d[1:], columns=all_d[0])
+        edited_diet = st.data_editor(df_diet, num_rows="dynamic", use_container_width=True, key="edit_diet")
+        if st.button("🔄 수정한 식단 데이터를 구글 시트에 덮어쓰기"):
+            sheet_diet.clear()
+            sheet_diet.append_rows([edited_diet.columns.tolist()] + edited_diet.fillna("").astype(str).values.tolist())
+            st.cache_data.clear()
+            st.success("식단 로그 원본이 완벽하게 수정되었습니다!")
+            st.rerun()
 
 # ------------------------------------------
 # 📈 TAB 4: 데이터/리포팅 센터
@@ -296,10 +360,8 @@ with tab_report:
         df_s['날짜'] = pd.to_datetime(df_s['날짜'], errors='coerce')
         df_s = df_s.dropna(subset=['날짜'])
         
-        # 💡 [V10.1 업데이트] 피로도를 빼고 기상 컨디션 스코어로 그래프 생성
         df_s['컨디션스코어'] = df_s['신체 컨디션'].apply(extract_number)
         df_s['수면시간(h)'] = df_s['수면 시간'].apply(extract_number)
-        
         df_recent7 = df_s.sort_values('날짜').tail(7).set_index('날짜')
         
         st.bar_chart(df_recent7[['수면시간(h)', '컨디션스코어']], color=["#2ca02c", "#1f77b4"])
@@ -327,22 +389,23 @@ with tab_report:
                     s_context = " | ".join([f"{r[0]}(수면:{r[2]}, 질:{r[3]}, 아침컨디션:{r[4]}, 체중:{r[1]})" for r in recent_s if len(r) > 4])
                     d_context = " | ".join([f"{r[0]}(총칼로리:{r[1]})" for r in recent_d if len(r) > 1])
                     
+                    # 💡 [V10.2 업데이트] 식단에 따른 운동 추천 로직 강화
                     prompt = f"""
                     너는 곽연혁 엘리트 축구 선수의 S-Tier 전담 코치야. 
                     {period_text} 데이터:
                     운동: {w_context}
                     수면/신체: {s_context}
-                    식단(칼로리): {d_context}
+                    식단(칼로리 및 영양): {d_context}
                     
-                    이 데이터를 분석해서 아래 포맷으로 반드시 대답해:
+                    이 데이터를 종합 분석해서 아래 포맷으로 반드시 대답해:
                     ### 🎯 1. 퍼포먼스 준비도 및 휴식 권장 스케일 (1/10 ~ 10/10)
-                    (반드시 '퍼포먼스 스케일: X/10' 형태로 명시하고, 현재 아침 컨디션 상태 및 휴식 필요성을 이유와 함께 설명)
+                    (반드시 '퍼포먼스 스케일: X/10' 형태로 명시하고, 현재 체력 상태 및 휴식 필요성을 설명)
                     
-                    ### 🧬 2. 신체, 수면, 식단이 훈련에 미친 상관관계 분석
-                    (팩트 기반 분석)
+                    ### 🧬 2. 영양/수면이 훈련에 미친 상관관계 분석
+                    (예: 섭취한 칼로리/식단이 전날 훈련 강도를 버티기에 충분했는지, 수면이 컨디션에 준 영향 등 팩트 기반 분석)
                     
-                    ### 🚀 3. 다음 사이클({report_type.split(' ')[0]}) 맞춤형 훈련 & 회복 솔루션
-                    (부족한 역학을 채우기 위한 디테일한 드릴 처방)
+                    ### 🚀 3. 식단 및 피로도를 고려한 다음 사이클 맞춤형 훈련 솔루션
+                    (특히 '어제오늘 섭취한 식단(에너지원)'을 바탕으로 내일 고강도를 할지, 저강도 리커버리를 할지 구체적인 훈련 종목과 강도를 지시해줘.)
                     """
                     
                     report_text = ask_gemini(prompt)
