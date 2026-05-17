@@ -84,8 +84,9 @@ tab_body, tab_workout, tab_diet, tab_report = st.tabs([
     "📊 신체 데이터", "🏋️ 운동 데이터", "🥗 식단 데이터", "📈 데이터/리포팅 센터"
 ])
 
+# 💡 [V10.0 에러 완벽 해결] 마침표만 있는 문장을 숫자로 착각하지 않도록 정규식 엄격화
 def extract_number(val):
-    match = re.search(r'([0-9.]+)', str(val))
+    match = re.search(r'(\d+(?:\.\d+)?)', str(val))
     return float(match.group(1)) if match else 0.0
 
 # ------------------------------------------
@@ -135,7 +136,6 @@ with tab_body:
     st.subheader("📈 엘리트 바디 컴포지션 트렌드 (AI 추정치)")
     if len(all_m) > 2:
         df_body = pd.DataFrame(all_m[1:], columns=all_m[0])
-        # 💡 [버그 픽스] 날짜 형식이 아닌 글자(예: ~)가 섞여 있으면 무시(NaT 처리)하고 삭제!
         df_body['날짜'] = pd.to_datetime(df_body['날짜'], errors='coerce')
         df_body = df_body.dropna(subset=['날짜'])
         
@@ -276,7 +276,6 @@ with tab_report:
         df_w = pd.DataFrame(all_w[1:], columns=all_w[0])
         df_s = pd.DataFrame(all_s[1:], columns=all_s[0])
         
-        # 💡 [버그 픽스] 날짜 형식이 아니면 무시(NaT)하고 드랍
         df_w['날짜'] = pd.to_datetime(df_w['날짜'], errors='coerce')
         df_s['날짜'] = pd.to_datetime(df_s['날짜'], errors='coerce')
         df_w = df_w.dropna(subset=['날짜'])
