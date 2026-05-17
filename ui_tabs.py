@@ -129,13 +129,14 @@ def render_workout_tab(today: str, bootcamp_mode: bool):
             location = st.text_input("📍 장소", "전주 용와초등학교 잔디구장", key="football_loc")
             c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
             
-            # 💡 [핵심] 연혁님의 전용 인터벌 종목 리스트
+            # 💡 [V13.7 업데이트] "프리킥 (세트 사이)" 추가
             drill_options = [
                 "40/20 풀코트 인터벌", 
                 "40/20 하프라인 인터벌", 
                 "25/20 페널티박스 인터벌", 
                 "15/5 드리블 슈팅 믹스 인터벌", 
-                "15/15 매스템포런"
+                "15/15 매스템포런",
+                "프리킥 (세트 사이)" 
             ]
             with c1: drill = st.selectbox("📋 종목", drill_options, key="football_drill")
             with c2: reps = st.number_input("횟수", min_value=1, step=1, key="football_reps")
