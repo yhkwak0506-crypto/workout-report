@@ -4,9 +4,9 @@ from datetime import datetime, date, time, timedelta
 import gspread
 from google.oauth2.service_account import Credentials
 
-# 💡 V14.2 업데이트: 지워진 ai_service 관련 import 및 로직을 완벽히 청소함.
+# 💡 V14.3 업데이트: 연혁님의 실제 구글 시트 주소(URL) 완벽 동기화 완료
 
-MY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1N4KGhJf1ta1M0cAtS0cXJayTe9ULsNGhL_9A1L4v6e8/edit#gid=0"
+MY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1N4KGhJf1ta1M0cAtS0cXJayTe9ULsNGhL_9A1L4v6e8_9u8Rdbo_Q/edit"
 
 @st.cache_resource
 def init_connection():
@@ -36,7 +36,6 @@ def get_cached_data(tab_name: str):
     return []
 
 def save_workout(data: dict):
-    # 구글 시트 양식 순서대로 행 조합 (날짜, 공복체중, 훈련볼륨, 평균심박, 최대심박, HRR, 상세내용, 코멘트)
     row = [
         data.get("날짜"),
         data.get("공복 체중"),
