@@ -58,10 +58,10 @@ def render_body_tab(today: str):
         
     with st.expander("📏 [선택 사항] 공복 신체 측정"):
         c_size1, c_size2, c_size3, c_size4 = st.columns(4)
-        with c_size1: chest_sz = st.number_input("가슴 (cm)", step=0.1, value=0.0, key="chest_sz")
-        with c_size2: arm_sz = st.number_input("팔 (cm)", step=0.1, value=0.0, key="arm_sz")
-        with c_size3: waist_sz = st.number_input("허리 (cm)", step=0.1, value=0.0, key="waist_sz")
-        with c_size4: thigh_sz = st.number_input("허벅지 (cm)", step=0.1, value=0.0, key="thigh_sz")
+        with c_size1: chest_sz = st.number_input("가슴 (cm)", min_value=0.0, step=0.1, value=0.0, key="chest_sz")
+        with c_size2: arm_sz = st.number_input("팔 (cm)", min_value=0.0, step=0.1, value=0.0, key="arm_sz")
+        with c_size3: waist_sz = st.number_input("허리 (cm)", min_value=0.0, step=0.1, value=0.0, key="waist_sz")
+        with c_size4: thigh_sz = st.number_input("허벅지 (cm)", min_value=0.0, step=0.1, value=0.0, key="thigh_sz")
 
     if st.button("🚀 신체 데이터 저장", key="save_body_btn"):
         row = [today, f"{m_weight}kg", f"{calc_sleep_hours}시간", f"{m_quality}점", f"{m_cond}점",
@@ -93,7 +93,7 @@ def render_body_tab(today: str):
 
 def render_workout_tab(today: str, bootcamp_mode: bool):
     st.header("🧠 오늘의 트레이닝 세션 로깅")
-    # 💡 요청에 따라 운동 탭에서 공복 체중 UI 완전 삭제. 뒤에서 세션 값만 조용히 가져갑니다.
+    # 💡 UI에서 공복 체중 입력칸 완벽 삭제 완료! (값을 뒤에서 몰래 가져갑니다)
 
     if bootcamp_mode:
         st.subheader("🪖 제31사단 훈련소 일과")
@@ -174,7 +174,7 @@ def render_workout_tab(today: str, bootcamp_mode: bool):
             if is_super == "단일 종목":
                 c1, c2, c3, c4 = st.columns(4)
                 with c1: w_ex = st.text_input("운동명", key="weight_ex_name")
-                with c2: w_kg = st.number_input("무게(kg)", value=0.0, step=2.5, key="weight_kg")
+                with c2: w_kg = st.number_input("무게(kg)", min_value=0.0, value=0.0, step=2.5, key="weight_kg")
                 with c3: w_rep = st.number_input("횟수", min_value=0, value=0, step=1, key="weight_reps")
                 with c4: w_set = st.number_input("세트", min_value=0, value=0, step=1, key="weight_sets")
                 if st.button("➕ 추가", key="add_single_weight"): st.session_state.weight_sets.append(f"{w_ex}({w_kg}kg x{w_rep}회 {w_set}세트)")
@@ -199,7 +199,7 @@ def render_workout_tab(today: str, bootcamp_mode: bool):
         if is_not_sure: h_avg, h_max, hrr_2m = 0, 0, "-"
         else:
             col_h1, col_h2, col_h3 = st.columns(3)
-            # 💡 TypeError 방지: value=0 으로 정수형 강제 통일
+            # 💡 TypeError 방지를 위해 int 형식(0)으로 모두 완벽히 통일
             with col_h1: h_avg = st.number_input("❤️ 평균 심박 (bpm)", min_value=0, value=0, step=1, key="hr_avg")
             with col_h2: h_max = st.number_input("🔥 최대 심박 (bpm)", min_value=0, value=0, step=1, key="hr_max")
             with col_h3: hrr_2m = st.text_input("📉 2분 심박 회복량 (HRR)", key="hrr_2m")
@@ -248,7 +248,6 @@ def render_diet_tab(today: str, bootcamp_mode: bool):
             if db.save_single_meal(today, col_map[bc_meal_select], f"{bc_meal_select} 섭취 완료"):
                 st.toast("✅ 훈련소 급식 저장 성공!"); time_mod.sleep(0.5); st.rerun()
     else:
-        # 💡 [기능 추가] 식단 탭 전용 "먹은 식단 기반 AI 칼로리 예측 프롬프트"
         st.subheader("🤖 식단 기반 칼로리 예측 프롬프트 (제미나이용)")
         st.caption("아래 버튼을 눌러 오늘 먹은 식단을 제미나이에게 던질 프롬프트를 뽑으세요.")
         if st.button("✨ 식단 분석 프롬프트 생성기"):
@@ -283,7 +282,6 @@ def render_diet_tab(today: str, bootcamp_mode: bool):
                 if st.button(f"💾 등록", key=f"btn_d_{idx}_save"):
                     if input_val.strip():
                         if db.save_single_meal(today, idx, input_val):
-                            # 💡 [기능 추가] 등록 성공 시 토스트 메시지 띄우기
                             st.toast(f"✅ {name} 식단 로깅 완료!"); time_mod.sleep(0.5); st.rerun()
 
 def render_report_tab():
@@ -292,7 +290,6 @@ def render_report_tab():
     st.subheader("📋 1:1 딥 코칭용 맞춤형 프롬프트 생성기")
     st.info("💡 아래에서 원하는 목적을 선택하고, 생성된 프롬프트를 복사해 제미나이(Gemini) 앱에 붙여넣으세요!")
     
-    # 💡 [기능 추가] 연혁님이 요청하신 정확한 4가지 분석 목적 탭
     report_type = st.radio("🎯 프롬프트 목적 선택", [
         "1️⃣ [운동 추천] 어제 운동 + 오늘 컨디션/식단 기반 오늘 훈련 추천받기",
         "2️⃣ [당일 분석] 오늘 운동 강도/수준 + 식단/신체 종합 평가",
