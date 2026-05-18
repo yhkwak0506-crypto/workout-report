@@ -4,7 +4,7 @@ from datetime import datetime, date, time, timedelta
 import gspread
 from google.oauth2.service_account import Credentials
 
-# 💡 V14.3 업데이트: 연혁님의 실제 구글 시트 주소(URL) 완벽 동기화 완료
+# 💡 V14.4 업데이트: 연혁님의 실제 구글 시트 ID 규격 완벽 정제 완료
 
 MY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1N4KGhJf1ta1M0cAtS0cXJayTe9ULsNGhL_9A1L4v6e8_9u8Rdbo_Q/edit"
 
