@@ -6,7 +6,8 @@ import utils
 import db_service as db
 import re
 
-# 💡 훈련 도감을 ui_tabs 내부로 이동 (프롬프트 생성용)
+# 💡 V14.1 업데이트: 차트 오류를 방지하고, 지워진 ai_service 관련 코드를 완벽히 청소함.
+
 TRAINING_DICT = """
 [곽연혁 선수 전용 훈련 역학 및 SOP (용와초 잔디구장 기준)]
 1. 웜업 조깅: 본 훈련 전 체온 상승 및 심박수 예열을 위한 가벼운 러닝.
@@ -96,7 +97,7 @@ def render_body_tab(today: str):
             df_s['수면시간(h)'] = df_s['수면 시간'].apply(utils.extract_number)
             
             st.write("---")
-            st.subheader("📈 바디 컴포지션 멀티 대시보드 (로컬 유지)")
+            st.subheader("📈 바디 컴포지션 멀티 대시보드")
             
             c1, c2 = st.columns(2)
             with c1: render_line_chart(df_s, '날짜', '체중', '#1f77b4', '⚖️ 체중 (kg)')
@@ -227,12 +228,10 @@ def render_workout_tab(today: str, bootcamp_mode: bool):
             with col_h2: h_max = st.number_input("🔥 최대 심박 (bpm)", min_value=0, step=1, key="hr_max")
             with col_h3: hrr_2m = st.text_input("📉 2분 심박 회복량 (HRR)", key="hrr_2m")
         
-        # 💡 [V14.0 핵심] AI 추정 대신 본인이 직접 체감 강도를 수동 입력
         rpe_score = st.slider("🔥 본인이 체감한 오늘 훈련의 육체적 강도 (RPE: 1~10)", 1, 10, 7)
         user_comment = st.text_area("✍️ 체감 코멘트 및 비고", key="workout_comment")
         
         if st.button("💾 0.1초 쾌속 로깅", key="save_workout_btn"):
-            # RPE 점수를 코멘트에 숨겨서 저장 (나중에 그래프가 읽을 수 있도록)
             final_comment = f"[RPE:{rpe_score}] {user_comment}"
             db.save_workout({
                 "날짜": today, "공복 체중": f"{m_weight_display}kg", "훈련 볼륨": f"{dist_val}km" if not is_not_sure else "미측정", 
@@ -263,7 +262,6 @@ def render_diet_tab(today: str, bootcamp_mode: bool):
             if r[0] == today:
                 for idx, col in zip(range(2, 7), [3,4,5,6,7]):
                     if len(r) > idx: 
-                        # 기존 셀 데이터 파싱
                         raws[col] = r[idx].split(' | ')[0] if ' | ' in r[idx] else r[idx]
                 break
     
@@ -274,7 +272,6 @@ def render_diet_tab(today: str, bootcamp_mode: bool):
             db.save_single_meal(today, col_map[bc_meal_select], f"{bc_meal_select} 섭취 완료")
             st.success("훈련소 급식 0.1초 저장 성공!"); st.rerun()
     else:
-        # 💡 [V14.0 핵심] AI 칼로리 연산 통신을 완전히 제거하여 에러와 로딩 원천 차단
         for name, idx in zip(["아침", "점심", "저녁", "간식", "야식"], [3,4,5,6,7]):
             c1, c2 = st.columns([4, 1])
             with c1: input_val = st.text_area(name, value=raws[idx], height=68, key=f"d_{idx}_input")
@@ -283,7 +280,7 @@ def render_diet_tab(today: str, bootcamp_mode: bool):
                 st.write("")
                 if st.button(f"💾 등록", key=f"btn_d_{idx}_save"):
                     if input_val.strip():
-                        db.save_single_meal(today, idx, input_val) # 바로 시트에 박아버림
+                        db.save_single_meal(today, idx, input_val)
                         st.rerun()
 
 def render_report_tab():
@@ -303,15 +300,12 @@ def render_report_tab():
         df_w['날짜'] = pd.to_datetime(df_w['날짜'], errors='coerce')
         df_w = df_w.dropna(subset=['날짜'])
         
-        # 💡 수동 입력된 RPE 데이터를 찾아내어 차트로 연결하는 함수
         def get_saved_intensity(row):
             try:
-                # 1. 새 버전의 수동 RPE 체크
                 comment = str(row.get('선수 코멘트', ''))
                 match = re.search(r'\[RPE:(\d+)\]', comment)
                 if match: return int(match.group(1))
                 
-                # 2. 구 버전의 AI 추정 강도 체크
                 note = str(row.get('생리학적 분석 및 영양/비고', ''))
                 if 'AI추정강도:' in note: return int(note.split(':')[1].split('|')[0])
             except: pass
@@ -364,7 +358,6 @@ def render_report_tab():
         w_ctx = "\n".join([f"- {r[0]}: {r[6]} (코멘트/RPE: {r[7]})" for r in (aw[-target_days:] if len(aw)>target_days else aw[1:]) if len(r)>7])
         s_ctx = "\n".join([f"- {r[0]}: 수면 {r[2]}, 기상컨디션 {r[4]}" for r in (a_s[-target_days:] if len(a_s)>target_days else a_s[1:]) if len(r)>4])
         
-        # 식단 요약 (인덱스 에러 방지 처리)
         d_lines = []
         for r in (a_d[-target_days:] if len(a_d)>target_days else a_d[1:]):
             if len(r) > 3:
@@ -372,7 +365,6 @@ def render_report_tab():
                 if meals: d_lines.append(f"- {r[0]}: {' / '.join(meals)}")
         d_ctx = "\n".join(d_lines) if d_lines else "- 기록 없음"
         
-        # 복사하기 좋게 마크다운 포맷으로 깔끔하게 조합
         final_prompt = f"""수석 피지컬 코치 제미나이에게.
 목표: 2027년 말 전역 직후 아일랜드, 덴마크, 스웨덴, 노르웨이 1~2부 리그 진출.
 
@@ -390,7 +382,7 @@ def render_report_tab():
 
 위의 데이터를 종합적으로 분석해줘.
 1. 선수가 최근 수행한 훈련의 역학적 타겟(도감 참조)을 바탕으로 하체와 심폐의 피로도를 진단해줘.
-2. 식단과 수면을 고려했을 때 초과 회복이 잘 되고 있는지 평가해줘.
+2. 식단และ 수면을 고려했을 때 초과 회복이 잘 되고 있는지 평가해줘.
 3. 유럽 리그 목표를 위해 내일 세션에서 보완해야 할 구체적인 솔루션(식단 추가, 훈련 강도 조절 등)을 직설적이고 날카롭게 제안해줘.
 """
         st.code(final_prompt, language="markdown")
