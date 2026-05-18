@@ -4,9 +4,9 @@ from datetime import datetime, date, time, timedelta
 import gspread
 from google.oauth2.service_account import Credentials
 
-# 💡 V14.5 업데이트: 연혁님의 진짜 2026 마스터 시트 주소 완벽 일치 완료
+# 💡 V14.6 업데이트: 구글 시트 ID 오타(0->O, X->x) 완벽 수정 완료
 
-MY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1N4KGhJf1ta1M0cAtS0cXJayTe9ULsNGhL_9u8Rdbo_Q/edit"
+MY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1N4KGhJf1ta1MOcAtSOxcJayTe9ULsNGhL_9u8Rdbo_Q/edit"
 
 @st.cache_resource
 def init_connection():
