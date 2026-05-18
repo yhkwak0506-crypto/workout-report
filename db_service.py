@@ -4,8 +4,9 @@ from datetime import datetime, date, time, timedelta
 import gspread
 from google.oauth2.service_account import Credentials
 
-# 💡 V14.6 업데이트: 구글 시트 ID 오타(0->O, X->x) 완벽 수정 완료
+# 💡 V14.7 업데이트: 구글 시트 실제 주소(O와 x) 반영 및 하단 탭 이름 동기화 완료
 
+# ⚠️ 만약 또 주소를 못 찾는다면, 본인의 구글 시트 인터넷 주소창을 그대로 복사해서 이 따옴표 안에 덮어써주세요!
 MY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1N4KGhJf1ta1MOcAtSOxcJayTe9ULsNGhL_9u8Rdbo_Q/edit"
 
 @st.cache_resource
@@ -20,10 +21,10 @@ def init_connection():
 gc = init_connection()
 spreadsheet = gc.open_by_url(MY_SHEET_URL)
 
-# 시트 이름 매핑
-sheet_sleep = spreadsheet.worksheet("수면및신체")
-sheet_workout = spreadsheet.worksheet("운동기록")
-sheet_diet = spreadsheet.worksheet("식단기록")
+# 💡 스크린샷의 실제 하단 탭 이름으로 완벽 매칭
+sheet_sleep = spreadsheet.worksheet("수면/컨디션 로그")
+sheet_workout = spreadsheet.worksheet("운동로그")
+sheet_diet = spreadsheet.worksheet("식단로그")
 
 @st.cache_data(ttl=600)
 def get_cached_data(tab_name: str):
