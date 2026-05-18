@@ -23,9 +23,7 @@ TRAINING_DICT = """
 def render_line_chart(df: pd.DataFrame, x_col: str, y_col: str, color: str, title: str):
     st.markdown(f"##### {title}")
     valid_df = df[df[y_col] > 0].copy()
-    if valid_df.empty:
-        st.info("차트를 그릴 데이터가 없습니다.")
-        return
+    if valid_df.empty: return
     valid_df = valid_df.sort_values(x_col)
     max_date = valid_df[x_col].max()
     min_view_date = max_date - timedelta(days=15)
@@ -55,24 +53,14 @@ def render_body_tab(today: str):
     col_m4, col_m5 = st.columns(2)
     with col_m4: m_quality = st.slider("⭐ 체감 수면의 질", 1, 10, 7)
     with col_m5: m_cond = st.slider("🏃 기상 직후 컨디션", 1, 10, 7)
-        
-    with st.expander("📏 [선택 사항] 공복 신체 측정"):
-        c_size1, c_size2, c_size3, c_size4 = st.columns(4)
-        with c_size1: chest_sz = st.number_input("가슴 (cm)", min_value=0.0, step=0.1, value=0.0, key="chest_sz")
-        with c_size2: arm_sz = st.number_input("팔 (cm)", min_value=0.0, step=0.1, value=0.0, key="arm_sz")
-        with c_size3: waist_sz = st.number_input("허리 (cm)", min_value=0.0, step=0.1, value=0.0, key="waist_sz")
-        with c_size4: thigh_sz = st.number_input("허벅지 (cm)", min_value=0.0, step=0.1, value=0.0, key="thigh_sz")
 
     if st.button("🚀 신체 데이터 저장", key="save_body_btn"):
-        row = [today, f"{m_weight}kg", f"{calc_sleep_hours}시간", f"{m_quality}점", f"{m_cond}점",
-            f"{chest_sz}cm" if chest_sz>0 else "-", f"{arm_sz}cm" if arm_sz>0 else "-",
-            f"{waist_sz}cm" if waist_sz>0 else "-", f"{thigh_sz}cm" if thigh_sz>0 else "-"]
+        row = [today, f"{m_weight}kg", f"{calc_sleep_hours}시간", f"{m_quality}점", f"{m_cond}점", "-", "-", "-", "-"]
         if hasattr(db.sheet_sleep, 'append_row'):
             db.sheet_sleep.append_row(row)
             st.cache_data.clear()
             st.toast("✅ 신체 데이터 초고속 저장 완료!")
-            time_mod.sleep(0.5)
-            st.rerun()
+            time_mod.sleep(0.5); st.rerun()
         
     all_s_body = db.get_cached_data("sleep")
     if len(all_s_body) > 1:
@@ -82,9 +70,7 @@ def render_body_tab(today: str):
         df_s['체중'] = df_s['공복 체중'].apply(utils.extract_number)
         
         if not df_s.empty:
-            df_s['추정 체지방률'] = round(11.5 + (df_s['체중'] - 77.5) * 0.7, 1)
             df_s['수면시간(h)'] = df_s['수면 시간'].apply(utils.extract_number)
-            
             st.write("---")
             st.subheader("📈 바디 컴포지션 대시보드")
             c1, c2 = st.columns(2)
@@ -93,7 +79,7 @@ def render_body_tab(today: str):
 
 def render_workout_tab(today: str, bootcamp_mode: bool):
     st.header("🧠 오늘의 트레이닝 세션 로깅")
-    # 💡 UI에서 공복 체중 입력칸 완벽 삭제 완료! (값을 뒤에서 몰래 가져갑니다)
+    # 💡 UI에서 공복 체중 완전 삭제 완료 (값은 백그라운드에서 session_state로 끌어옴)
 
     if bootcamp_mode:
         st.subheader("🪖 제31사단 훈련소 일과")
@@ -199,7 +185,6 @@ def render_workout_tab(today: str, bootcamp_mode: bool):
         if is_not_sure: h_avg, h_max, hrr_2m = 0, 0, "-"
         else:
             col_h1, col_h2, col_h3 = st.columns(3)
-            # 💡 TypeError 방지를 위해 int 형식(0)으로 모두 완벽히 통일
             with col_h1: h_avg = st.number_input("❤️ 평균 심박 (bpm)", min_value=0, value=0, step=1, key="hr_avg")
             with col_h2: h_max = st.number_input("🔥 최대 심박 (bpm)", min_value=0, value=0, step=1, key="hr_max")
             with col_h3: hrr_2m = st.text_input("📉 2분 심박 회복량 (HRR)", key="hrr_2m")
@@ -217,18 +202,7 @@ def render_workout_tab(today: str, bootcamp_mode: bool):
                 st.session_state.football_drills = []
                 st.session_state.cardio_drills = []
                 st.session_state.weight_sets = []
-                st.toast("✅ 운동 기록이 데이터베이스에 저장되었습니다!"); time_mod.sleep(0.5); st.rerun()
-
-    st.write("---")
-    all_w = db.get_cached_data("workout")
-    if len(all_w) > 1:
-        df_w = pd.DataFrame(all_w[1:], columns=all_w[0]).tail(20)
-        edited_w = st.data_editor(df_w, num_rows="dynamic", use_container_width=True, key="workout_db_editor")
-        if st.button("🔄 운동 데이터 덮어쓰기", key="overwrite_workout_btn"):
-            if hasattr(db.sheet_workout, 'clear'):
-                db.sheet_workout.clear()
-                db.sheet_workout.append_rows([edited_w.columns.tolist()] + edited_w.fillna("").astype(str).values.tolist())
-                st.toast("✅ 덮어쓰기 완료!"); time_mod.sleep(0.5); st.cache_data.clear(); st.rerun()
+                st.toast("✅ 운동 기록 저장 완료!"); time_mod.sleep(0.5); st.rerun()
 
 def render_diet_tab(today: str, bootcamp_mode: bool):
     st.header("🥗 영양 섭취 로깅 (초고속)")
@@ -248,6 +222,7 @@ def render_diet_tab(today: str, bootcamp_mode: bool):
             if db.save_single_meal(today, col_map[bc_meal_select], f"{bc_meal_select} 섭취 완료"):
                 st.toast("✅ 훈련소 급식 저장 성공!"); time_mod.sleep(0.5); st.rerun()
     else:
+        # 💡 식단 전용 프롬프트 생성기 위치
         st.subheader("🤖 식단 기반 칼로리 예측 프롬프트 (제미나이용)")
         st.caption("아래 버튼을 눌러 오늘 먹은 식단을 제미나이에게 던질 프롬프트를 뽑으세요.")
         if st.button("✨ 식단 분석 프롬프트 생성기"):
@@ -282,13 +257,14 @@ def render_diet_tab(today: str, bootcamp_mode: bool):
                 if st.button(f"💾 등록", key=f"btn_d_{idx}_save"):
                     if input_val.strip():
                         if db.save_single_meal(today, idx, input_val):
-                            st.toast(f"✅ {name} 식단 로깅 완료!"); time_mod.sleep(0.5); st.rerun()
+                            st.toast(f"✅ {name} 로깅 완료!"); time_mod.sleep(0.5); st.rerun()
 
 def render_report_tab():
     st.header("📈 퍼포먼스 데이터 및 맞춤형 프롬프트 센터")
     
+    # 💡 4단계 분석 프롬프트 생성기 위치
     st.subheader("📋 1:1 딥 코칭용 맞춤형 프롬프트 생성기")
-    st.info("💡 아래에서 원하는 목적을 선택하고, 생성된 프롬프트를 복사해 제미나이(Gemini) 앱에 붙여넣으세요!")
+    st.info("💡 원하는 목적을 선택하고, 생성된 프롬프트를 복사해 제미나이(Gemini) 앱에 붙여넣으세요!")
     
     report_type = st.radio("🎯 프롬프트 목적 선택", [
         "1️⃣ [운동 추천] 어제 운동 + 오늘 컨디션/식단 기반 오늘 훈련 추천받기",
